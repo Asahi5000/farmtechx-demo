@@ -232,14 +232,34 @@ export default function MunicipalityManagePage() {
   // --- RENDERERS ---
   const StarSelector = ({ rating, onChange }: { rating: number, onChange: (v: number) => void }) => {
     return (
-      <div className="flex gap-1">
-        {[1,2,3,4,5].map(v => (
-          <Star 
-            key={v} 
-            className={`w-6 h-6 cursor-pointer ${v <= rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} 
-            onClick={() => onChange(v)}
-          />
-        ))}
+      <div className="flex items-center gap-3">
+        <div className="flex gap-1">
+          {[1,2,3,4,5].map(v => (
+            <div key={v} className="relative w-6 h-6 cursor-pointer">
+              {/* Background empty star */}
+              <Star className="absolute inset-0 w-6 h-6 text-gray-300" />
+              
+              {/* Foreground filled star (full or partial) */}
+              <div 
+                className="absolute inset-0 overflow-hidden"
+                style={{ width: rating >= v ? '100%' : rating >= v - 0.5 ? '50%' : '0%' }}
+              >
+                <Star className="w-6 h-6 fill-yellow-400 text-yellow-400" />
+              </div>
+
+              {/* Hitboxes for half and full click */}
+              <div 
+                className="absolute inset-y-0 left-0 w-1/2 z-10" 
+                onClick={() => onChange(v - 0.5)}
+              />
+              <div 
+                className="absolute inset-y-0 right-0 w-1/2 z-10" 
+                onClick={() => onChange(v)}
+              />
+            </div>
+          ))}
+        </div>
+        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{rating.toFixed(1)} / 5</span>
       </div>
     );
   };
@@ -325,8 +345,30 @@ export default function MunicipalityManagePage() {
                     <Input value={item.name} onChange={(e) => updateContentItem(setItems, idx, 'name', e.target.value)} />
                   </div>
                   <div>
-                    <Label>Price Range (e.g. Free, ₱, ₱₱, ₱₱₱)</Label>
-                    <Input value={item.priceRange} onChange={(e) => updateContentItem(setItems, idx, 'priceRange', e.target.value)} />
+                    <Label>
+                      {title === 'Things to Do' ? 'Entrance / Activity Fee' : 
+                       title === 'Places to Visit' ? 'Entrance Fee' : 
+                       'Price Range'}
+                    </Label>
+                    {(title === 'Where to Eat' || title === 'Where to Stay') ? (
+                      <select
+                        className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-3 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:focus:border-brand-500 dark:text-white"
+                        value={item.priceRange}
+                        onChange={(e) => updateContentItem(setItems, idx, 'priceRange', e.target.value)}
+                      >
+                        <option value="" disabled>Select price range</option>
+                        <option value="Free">Free</option>
+                        <option value="₱ (Budget)">₱ (Budget)</option>
+                        <option value="₱₱ (Mid-range)">₱₱ (Mid-range)</option>
+                        <option value="₱₱₱ (Premium)">₱₱₱ (Premium)</option>
+                      </select>
+                    ) : (
+                      <Input 
+                        placeholder={title === 'Things to Do' ? 'e.g. Free, ₱50 entrance fee, ₱200/activity' : 'e.g. Free, ₱50 environmental fee, ₱100/person'}
+                        value={item.priceRange} 
+                        onChange={(e) => updateContentItem(setItems, idx, 'priceRange', e.target.value)} 
+                      />
+                    )}
                   </div>
                   
                   <div className="col-span-1 border border-gray-200 dark:border-gray-700 p-3 rounded-lg flex flex-col justify-center">
@@ -695,9 +737,8 @@ export default function MunicipalityManagePage() {
       {renderContentItems('Where to Stay', <Bed className="w-5 h-5" />, 'whereToStay', whereToStay, setWhereToStay)}
       {renderTransportOptions()}
 
-      {/* Global Save Button for Content */}
       <div className="flex justify-end pt-8">
-        <Button onClick={handleSaveContentAndTransport} disabled={savingContent} size="lg" className="px-8 shadow-sm">
+        <Button onClick={handleSaveContentAndTransport} disabled={savingContent} className="px-8 shadow-sm">
           {savingContent ? "Saving Content..." : "Save Content Changes"}
         </Button>
       </div>

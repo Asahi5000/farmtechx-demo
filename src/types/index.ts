@@ -154,6 +154,10 @@ export interface Municipality {
   // Featured / Popular Destinations
   isFeatured?: boolean;
   featuredOrder?: number;
+  // Ratings (computed or fetched)
+  averageRating?: number;
+  rating?: number;
+  computedRating?: number | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
