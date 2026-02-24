@@ -19,6 +19,7 @@ import { useToast } from "@/context/ToastContext";
 import { AnimatePresence, motion } from "framer-motion";
 import { storage } from "@/config/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { Timestamp } from "firebase/firestore";
 import Link from "next/link";
 
 const getRegionRank = (name: string) => {
@@ -40,6 +41,7 @@ const getRegionRank = (name: string) => {
 function VotingStatusTimer({ province }: { province: Province }) {
   const [timeLeft, setTimeLeft] = useState<string>("");
   const [status, setStatus] = useState<"Not Set" | "Active" | "Ended">("Not Set");
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!province.votingStartDate || !province.votingEndDate) {
@@ -50,9 +52,30 @@ function VotingStatusTimer({ province }: { province: Province }) {
     let isProcessing = false;
 
     const checkStatus = async () => {
+      // Auto-clear lastVotingResult if older than 3 days
+      if (province.lastVotingResultDate) {
+        const resultDate = province.lastVotingResultDate.toDate();
+        const nowMs = new Date().getTime();
+        const diffDays = (nowMs - resultDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (diffDays > 3) {
+          try {
+             await provincesService.update(province.id, {
+               lastVotingResult: null,
+               lastVotingResultDate: null
+             });
+          } catch(e) {}
+        }
+      }
+
+      if (!province.votingStartDate || !province.votingEndDate) {
+        setStatus("Not Set");
+        setTimeLeft("");
+        return;
+      }
+
       const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }));
-      const start = new Date(province.votingStartDate! + "T00:00:00");
-      const end = new Date(province.votingEndDate! + "T23:59:59"); 
+      const start = new Date(province.votingStartDate);
+      const end = new Date(province.votingEndDate);
 
       if (now < start) {
         setStatus("Not Set");
@@ -69,12 +92,12 @@ function VotingStatusTimer({ province }: { province: Province }) {
         setStatus("Ended");
         setTimeLeft("");
         
-        // Auto-enable winner if not yet processed
-        if (!isProcessing) {
+        // Auto-enable winner if not yet processed and NOT already resolved
+        if (!isProcessing && !province.votingResolved) {
           isProcessing = true;
           try {
-            const munis = await municipalitiesService.getByProvince(province.id);
-            const comingSoonMunis = munis.filter(m => m.status === 'coming_soon');
+            const allMunis = await municipalitiesService.getAll();
+            const comingSoonMunis = allMunis.filter(m => m.provinceId === province.id && m.status === 'coming_soon');
             
             if (comingSoonMunis.length > 0) {
               // Sort by voteCount desc
@@ -93,6 +116,25 @@ function VotingStatusTimer({ province }: { province: Province }) {
                 );
                 await Promise.all(updatePromises);
               }
+
+              const resultMsg = `Voting ended for ${province.name}! Winner: ${winner.name} is now Enabled!`;
+              showToast(resultMsg, 'success');
+
+              // Mark province as explicitly resolved
+              await provincesService.update(province.id, { 
+                votingResolved: true,
+                votingStartDate: null as any,
+                votingEndDate: null as any,
+                lastVotingResult: resultMsg,
+                lastVotingResultDate: Timestamp.now()
+              });
+            } else {
+              // Even if empty, mark as resolved so we don't query every single tick
+              await provincesService.update(province.id, { 
+                votingResolved: true,
+                votingStartDate: null as any,
+                votingEndDate: null as any
+              });
             }
           } catch (error) {
             console.error("Failed to process voting results for province", province.id, error);
@@ -136,12 +178,9 @@ export default function ProvincesPage() {
   const [formTagline, setFormTagline] = useState("");
   const [formImage, setFormImage] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  
   const [formPhotos, setFormPhotos] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  
-  const [votingStartDate, setVotingStartDate] = useState("");
-  const [votingEndDate, setVotingEndDate] = useState("");
+  const [isDirty, setIsDirty] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -150,19 +189,22 @@ export default function ProvincesPage() {
         provincesService.getAll(),
         regionsService.getAll()
       ]);
-      const regionIslandGroupMap = regionsList.reduce((acc, region) => {
-        acc[region.id] = region.islandGroupName;
+      
+      const regionMap = regionsList.reduce((acc, region) => {
+        acc[region.id] = { name: region.name, islandGroupName: region.islandGroupName };
+        // Also map island group
         return acc;
-      }, {} as Record<string, string>);
+      }, {} as Record<string, { name: string, islandGroupName?: string }>);
 
       const mappedProvinces = provinces.map(p => ({
         ...p,
-        islandGroupName: p.islandGroupName || regionIslandGroupMap[p.regionId] || "Unknown"
+        regionName: regionMap[p.regionId]?.name || p.regionName || "Unknown",
+        islandGroupName: regionMap[p.regionId]?.islandGroupName || p.islandGroupName || "Unknown"
       }));
       setData(mappedProvinces);
       
       const regionOptions = regionsList
-        .sort((a, b) => getRegionRank(a.name) - getRegionRank(b.name))
+        .sort((a, b) => a.name.localeCompare(b.name))
         .map(r => ({
           value: r.id,
           label: r.name
@@ -180,23 +222,15 @@ export default function ProvincesPage() {
     loadData();
   }, []);
 
-  const handleEditClick = (province: Province) => {
+  const handleEditClick = async (province: Province) => {
     setEditingProvince(province);
     setFormName(province.name);
     setFormTagline(province.tagline || "");
     setFormImage(province.image || "");
     setFormPhotos(province.photos || []);
-
-    // Ensure we use Philippine Time
-    const todayInPH = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }));
-    const yyyy = todayInPH.getFullYear();
-    const mm = String(todayInPH.getMonth() + 1).padStart(2, '0');
-    const dd = String(todayInPH.getDate()).padStart(2, '0');
-    const defaultStart = `${yyyy}-${mm}-${dd}`;
-
-    setVotingStartDate(province.votingStartDate || defaultStart);
-    setVotingEndDate(province.votingEndDate || "");
+    
     setImageFile(null);
+    setIsDirty(false);
     setIsModalOpen(true);
   };
 
@@ -213,27 +247,35 @@ export default function ProvincesPage() {
       const file = e.target.files[0];
       setImageFile(file);
       setFormImage(URL.createObjectURL(file));
+      setIsDirty(true);
     }
   };
 
   const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
+    
     setUploadingPhotos(true);
     try {
       const files = Array.from(e.target.files);
-      const uploadPromises = files.map(async (file) => {
-        const fileRef = ref(storage, `provinces/gallery/${file.name}_${Date.now()}`);
-        await uploadBytes(fileRef, file);
-        return await getDownloadURL(fileRef);
-      });
-      const urls = await Promise.all(uploadPromises);
-      setFormPhotos(prev => [...prev, ...urls]);
-      showToast("Photos uploaded successfully", "success");
+      const newUrls = await Promise.all(
+        files.map(async (file) => {
+          const fileRef = ref(storage, `provinces/gallery/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`);
+          await uploadBytes(fileRef, file);
+          return await getDownloadURL(fileRef);
+        })
+      );
+      
+      setFormPhotos(prev => [...prev, ...newUrls]);
+      setIsDirty(true);
     } catch (error) {
-      console.error("Gallery upload error:", error);
-      showToast("Failed to upload photos", "error");
+      console.error("Failed to upload gallery photos", error);
+      showToast("Failed to upload photos.", "error");
     } finally {
       setUploadingPhotos(false);
+      // Reset input
+      if (document.getElementById('province-gallery-upload')) {
+        (document.getElementById('province-gallery-upload') as HTMLInputElement).value = '';
+      }
     }
   };
 
@@ -254,8 +296,6 @@ export default function ProvincesPage() {
         tagline: formTagline,
         image: finalImageUrl,
         photos: formPhotos,
-        votingStartDate,
-        votingEndDate
       });
       showToast("Province updated successfully.", "success");
       closeModal();
@@ -279,32 +319,39 @@ export default function ProvincesPage() {
   return (
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-title-md2 font-semibold text-black dark:text-white">
+        <h2 className="text-title-sm2 font-bold text-black dark:text-white">
           Provinces
         </h2>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 w-full sm:w-1/2 justify-end">
-          <div className="w-full sm:w-1/2">
-            <Select
-              options={regions}
-              defaultValue=""
-              placeholder="Filter by Region"
-              onChange={(val) => setRegionFilter(val)}
-            />
-          </div>
-          <div className="w-full sm:w-1/2">
-            <Input
-              type="text"
-              placeholder="Search provinces..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/[0.05] dark:bg-white/[0.03]">
-        <div className="max-w-full overflow-x-auto">
-          <div className="min-w-[900px]">
+      <div className="flex flex-col gap-5 md:gap-7 2xl:gap-10">
+        <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+          <div className="px-4 py-4 md:px-6 md:py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100 dark:border-gray-800">
+            <h3 className="text-lg font-medium text-gray-800 dark:text-white/90">
+              Provinces List
+            </h3>
+            
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <div className="w-full sm:w-[300px]">
+                <Input
+                  type="text"
+                  placeholder="Search provinces..."
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div className="w-full sm:w-1/2">
+                <Select
+                  options={regions}
+                  value={regionFilter}
+                  placeholder="Filter by Region"
+                  onChange={(val) => setRegionFilter(val)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto max-w-full">
             <Table>
               <TableHeader className="border-b border-gray-100 dark:border-white/[0.05]">
                 <TableRow>
@@ -344,13 +391,13 @@ export default function ProvincesPage() {
               <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
                 {loading ? (
                   <TableRow>
-                    <TableCell className="px-5 py-4 text-gray-500" colSpan={4}>
+                    <TableCell className="px-5 py-4 text-gray-500" colSpan={5}>
                       Loading data...
                     </TableCell>
                   </TableRow>
                 ) : filteredData.length === 0 ? (
                   <TableRow>
-                    <TableCell className="px-5 py-4 text-gray-500" colSpan={4}>
+                    <TableCell className="px-5 py-4 text-gray-500" colSpan={5}>
                       No provinces found matching your search.
                     </TableCell>
                   </TableRow>
@@ -461,7 +508,7 @@ export default function ProvincesPage() {
                     <Input
                       type="text"
                       value={formTagline}
-                      onChange={(e) => setFormTagline(e.target.value)}
+                      onChange={(e) => { setFormTagline(e.target.value); setIsDirty(true); }}
                     />
                   </div>
 
@@ -473,14 +520,14 @@ export default function ProvincesPage() {
                           <img src={url} alt={`Gallery ${idx}`} className="w-full h-full object-cover rounded-xl border border-gray-200" />
                           <button
                             type="button"
-                            onClick={() => setFormPhotos(formPhotos.filter((_, i) => i !== idx))}
+                            onClick={() => { setFormPhotos(formPhotos.filter((_, i) => i !== idx)); setIsDirty(true); }}
                             className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                           </button>
                         </div>
                       ))}
-                      <label className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
+                      <label id="province-gallery-upload" className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-colors">
                         {uploadingPhotos ? (
                           <span className="text-xs text-gray-400">Uploading...</span>
                         ) : (
@@ -501,29 +548,15 @@ export default function ProvincesPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <Label>Voting Start Date</Label>
-                    <Input
-                      type="date"
-                      value={votingStartDate}
-                      onChange={(e) => setVotingStartDate(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label>Voting End Date</Label>
-                    <Input
-                      type="date"
-                      value={votingEndDate}
-                      onChange={(e) => setVotingEndDate(e.target.value)}
-                    />
-                  </div>
+
+
                 </div>
 
-                <div className="flex items-center justify-end w-full gap-3 mt-4">
+                <div className="flex items-center justify-end w-full gap-3 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                   <Button size="sm" variant="outline" onClick={closeModal} type="button">
                     Cancel
                   </Button>
-                  <Button size="sm" type="submit" disabled={saving}>
+                  <Button size="sm" type="submit" disabled={saving || !isDirty}>
                     {saving ? "Saving..." : "Save Changes"}
                   </Button>
                 </div>

@@ -9,7 +9,9 @@ import {
   query, 
   orderBy,
   where,
-  Timestamp 
+  Timestamp,
+  getCountFromServer,
+  limit
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from './firebase';
@@ -18,11 +20,12 @@ import {
   Region, 
   Province, 
   Municipality, 
-  PopularDestination 
+  PopularDestination,
+  FeaturedAttraction 
 } from '@/types';
 
 // Collection names
-const COLLECTIONS = {
+export const COLLECTIONS = {
   ISLAND_GROUPS: 'islandGroups',
   REGIONS: 'regions',
   PROVINCES: 'provinces',
@@ -183,11 +186,11 @@ export const municipalitiesService = {
   async getByProvince(provinceId: string): Promise<Municipality[]> {
     const q = query(
       collection(db, COLLECTIONS.MUNICIPALITIES),
-      where('provinceId', '==', provinceId),
-      orderBy('name')
+      where('provinceId', '==', provinceId)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Municipality));
+    const munis = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Municipality));
+    return munis.sort((a, b) => a.name.localeCompare(b.name));
   },
 
   async create(data: Omit<Municipality, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
@@ -213,7 +216,7 @@ export const municipalitiesService = {
   },
 };
 
-// Popular Destinations CRUD
+// Popular Destinations CRUD (legacy)
 export const popularDestinationsService = {
   async getAll(): Promise<PopularDestination[]> {
     const q = query(collection(db, COLLECTIONS.POPULAR_DESTINATIONS), orderBy('name'));
@@ -240,6 +243,38 @@ export const popularDestinationsService = {
 
   async delete(id: string): Promise<void> {
     const docRef = doc(db, COLLECTIONS.POPULAR_DESTINATIONS, id);
+    await deleteDoc(docRef);
+  },
+};
+
+// Featured Attractions CRUD (new - ContentItem-based)
+const FEATURED_ATTRACTIONS_COLLECTION = 'featuredAttractions';
+export const featuredAttractionsService = {
+  async getAll(): Promise<FeaturedAttraction[]> {
+    const q = query(collection(db, FEATURED_ATTRACTIONS_COLLECTION), orderBy('featuredOrder'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeaturedAttraction));
+  },
+
+  async create(data: Omit<FeaturedAttraction, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    const docRef = await addDoc(collection(db, FEATURED_ATTRACTIONS_COLLECTION), {
+      ...data,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    return docRef.id;
+  },
+
+  async update(id: string, data: Partial<FeaturedAttraction>): Promise<void> {
+    const docRef = doc(db, FEATURED_ATTRACTIONS_COLLECTION, id);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    const docRef = doc(db, FEATURED_ATTRACTIONS_COLLECTION, id);
     await deleteDoc(docRef);
   },
 };

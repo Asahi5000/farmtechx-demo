@@ -14,8 +14,10 @@ export default function SelectInputs() {
   ];
 
   const [selectedValues, setSelectedValues] = useState<string[]>([]);
+  const [singleSelectedValue, setSingleSelectedValue] = useState("");
 
   const handleSelectChange = (value: string) => {
+    setSingleSelectedValue(value);
     console.log("Selected value:", value);
   };
 
@@ -35,7 +37,7 @@ export default function SelectInputs() {
          <div className="relative">
            <Select
             options={options}
-            placeholder="Select Option"
+            value={singleSelectedValue}
             onChange={handleSelectChange}
             className="dark:bg-dark-900"
           />

@@ -38,7 +38,10 @@ const emptyContentItem = (): ContentItem => ({
   priceRange: '',
   amenities: [],
   location: { address: '', coordinates: { latitude: 0, longitude: 0 }, mapUrl: '' },
-  photos: []
+  photos: [],
+  type: '',
+  pricing: '',
+  activities: []
 });
 
 const emptyTransportOption = (): TransportOption => ({
@@ -65,6 +68,8 @@ export default function MunicipalityManagePage() {
   const [loading, setLoading] = useState(true);
   const [savingTags, setSavingTags] = useState(false);
   const [savingContent, setSavingContent] = useState(false);
+  const [isDirtyTags, setIsDirtyTags] = useState(false);
+  const [isDirtyContent, setIsDirtyContent] = useState(false);
 
   // Tags Form State
   const [activities, setActivities] = useState<string[]>([]);
@@ -125,6 +130,20 @@ export default function MunicipalityManagePage() {
     if (id) fetchMuni();
   }, [id, router, showToast]);
 
+  // Track tag changes after initial load  
+  const tagsLoadedRef = React.useRef(false);
+  useEffect(() => {
+    if (!tagsLoadedRef.current) { tagsLoadedRef.current = true; return; }
+    setIsDirtyTags(true);
+  }, [activities, spending, travelStyles, tripLengths]);
+
+  // Track content changes after initial load
+  const contentLoadedRef = React.useRef(false);
+  useEffect(() => {
+    if (!contentLoadedRef.current) { contentLoadedRef.current = true; return; }
+    setIsDirtyContent(true);
+  }, [thingsToDo, placesToVisit, whereToEat, whereToStay, transportation]);
+
   const handleToggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
@@ -146,6 +165,7 @@ export default function MunicipalityManagePage() {
         tripLengths,
       });
       showToast("Tags & Attributes saved successfully", "success");
+      setIsDirtyTags(false);
     } catch (error) {
       showToast("Failed to save tags", "error");
     } finally {
@@ -164,6 +184,7 @@ export default function MunicipalityManagePage() {
         transportation
       });
       showToast("Content & Transportation saved successfully", "success");
+      setIsDirtyContent(false);
     } catch (error) {
       showToast("Failed to save content", "error");
     } finally {
@@ -385,6 +406,69 @@ export default function MunicipalityManagePage() {
                       onChange={(e) => updateContentItem(setItems, idx, 'description', e.target.value)}
                     />
                   </div>
+
+                  {/* Places to Visit specific fields */}
+                  {sectionKey === 'placesToVisit' && (
+                    <>
+                      <div>
+                        <Label>Type</Label>
+                        <Input 
+                          placeholder="e.g. Beach, Park, Mountain, Island, Shrine" 
+                          value={item.type || ''} 
+                          onChange={(e) => updateContentItem(setItems, idx, 'type', e.target.value)} 
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <div className="flex justify-between items-center mb-2">
+                          <Label>Activities</Label>
+                        </div>
+                        <div className="flex gap-2 mb-3">
+                          <Input 
+                            placeholder="e.g. Skating, Snorkeling, Island Hopping" 
+                            id={`activity-input-${item.id}`}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const input = e.target as HTMLInputElement;
+                                const val = input.value.trim();
+                                if (val) {
+                                  updateContentItem(setItems, idx, 'activities', [...(item.activities || []), val]);
+                                  input.value = '';
+                                }
+                              }
+                            }}
+                          />
+                          <Button type="button" variant="outline" size="sm" onClick={() => {
+                            const input = document.getElementById(`activity-input-${item.id}`) as HTMLInputElement;
+                            const val = input?.value.trim();
+                            if (val) {
+                              updateContentItem(setItems, idx, 'activities', [...(item.activities || []), val]);
+                              input.value = '';
+                            }
+                          }}>
+                            <Plus className="w-4 h-4 mr-1" /> Add
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {(item.activities || []).map((act, actIdx) => (
+                            <span key={actIdx} className="inline-flex items-center gap-1 bg-brand-50 text-brand-600 px-3 py-1 rounded-full text-sm font-medium dark:bg-brand-500/10 dark:text-brand-400">
+                              {act}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = (item.activities || []).filter((_, i) => i !== actIdx);
+                                  updateContentItem(setItems, idx, 'activities', updated);
+                                }}
+                                className="ml-1 text-brand-400 hover:text-red-500 transition-colors"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   {/* Location Details */}
                   <div className="md:col-span-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -638,7 +722,7 @@ export default function MunicipalityManagePage() {
               </p>
             </div>
           </div>
-          <Button onClick={handleSaveTags} disabled={savingTags} size="sm">
+          <Button onClick={handleSaveTags} disabled={savingTags || !isDirtyTags} size="sm">
             {savingTags ? "Saving..." : "Save Tags"}
           </Button>
         </div>
@@ -738,7 +822,7 @@ export default function MunicipalityManagePage() {
       {renderTransportOptions()}
 
       <div className="flex justify-end pt-8">
-        <Button onClick={handleSaveContentAndTransport} disabled={savingContent} className="px-8 shadow-sm">
+        <Button onClick={handleSaveContentAndTransport} disabled={savingContent || !isDirtyContent} className="px-8 shadow-sm">
           {savingContent ? "Saving Content..." : "Save Content Changes"}
         </Button>
       </div>

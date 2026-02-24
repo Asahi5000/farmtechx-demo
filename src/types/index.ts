@@ -63,6 +63,9 @@ export interface Province {
   // Province-wide voting period for coming soon municipalities
   votingStartDate?: string; // ISO date when voting starts for this province
   votingEndDate?: string; // ISO date when voting ends (winner auto-enables)
+  votingResolved?: boolean; // Flag to ensure auto-resolution only effectively runs once
+  lastVotingResult?: string | null;
+  lastVotingResultDate?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -99,6 +102,11 @@ export interface ContentItem {
   // Auto-calculated from reviews (read-only in CMS) - OPTIONAL
   reviewCount?: number;
   averageRating?: number;
+
+  // Additional optional fields (most relevant for placesToVisit)
+  type?: string; // e.g. Beach, Park, Mountain, Island, Shrine
+  pricing?: string; // Optional entrance fee / pricing info
+  activities?: string[]; // e.g. ["Skating", "Snorkeling", "Island Hopping"]
 }
 
 // Transport option for land/sea/air
@@ -205,6 +213,20 @@ export interface PopularDestination {
   type: string;
   priceEstimate: string;
   gallery: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// New: Featured attraction from municipality ContentItems (thingsToDo / placesToVisit)
+export interface FeaturedAttraction {
+  id: string;
+  contentItemId: string;
+  contentItemName: string;
+  municipalityId: string;
+  municipalityName: string;
+  provinceName: string;
+  image: string;
+  featuredOrder: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

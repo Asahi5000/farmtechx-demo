@@ -35,6 +35,7 @@ export default function IslandGroupsPage() {
   const [formDescription, setFormDescription] = useState("");
   const [formImage, setFormImage] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -60,6 +61,7 @@ export default function IslandGroupsPage() {
     setFormDescription(group.description || "");
     setFormImage(group.image || "");
     setImageFile(null);
+    setIsDirty(false);
     setIsModalOpen(true);
   };
 
@@ -76,6 +78,7 @@ export default function IslandGroupsPage() {
       const file = e.target.files[0];
       setImageFile(file);
       setFormImage(URL.createObjectURL(file));
+      setIsDirty(true);
     }
   };
 
@@ -274,7 +277,7 @@ export default function IslandGroupsPage() {
                     <Input
                       type="text"
                       value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
+                      onChange={(e) => { setFormName(e.target.value); setIsDirty(true); }}
                       required
                     />
                   </div>
@@ -284,7 +287,7 @@ export default function IslandGroupsPage() {
                     <Input
                       type="text"
                       value={formTagline}
-                      onChange={(e) => setFormTagline(e.target.value)}
+                      onChange={(e) => { setFormTagline(e.target.value); setIsDirty(true); }}
                       required
                     />
                   </div>
@@ -295,7 +298,7 @@ export default function IslandGroupsPage() {
                       className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-3 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:focus:border-brand-500"
                       rows={4}
                       value={formDescription}
-                      onChange={(e) => setFormDescription(e.target.value)}
+                      onChange={(e) => { setFormDescription(e.target.value); setIsDirty(true); }}
                       required
                     />
                   </div>
@@ -305,7 +308,7 @@ export default function IslandGroupsPage() {
                   <Button size="sm" variant="outline" onClick={closeModal} type="button">
                     Cancel
                   </Button>
-                  <Button size="sm" type="submit" disabled={saving}>
+                  <Button size="sm" type="submit" disabled={saving || !isDirty}>
                     {saving ? "Saving..." : "Save Changes"}
                   </Button>
                 </div>

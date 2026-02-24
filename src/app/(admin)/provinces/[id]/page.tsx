@@ -2,11 +2,18 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, Sparkles, Upload, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, Sparkles, Upload, Loader2, Clock } from "lucide-react";
 import Button from "@/components/ui/button/Button";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
-import { provincesService } from "@/config/firestoreService";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { provincesService, municipalitiesService } from "@/config/firestoreService";
 import { Province, Festival } from "@/types";
 import { useToast } from "@/context/ToastContext";
 import { storage } from "@/config/firebase";
@@ -22,12 +29,21 @@ export default function ProvinceManagePage() {
   const [loading, setLoading] = useState(true);
 
   // Accordion states
-  const [openSection, setOpenSection] = useState<number>(2);
+  const [openSection, setOpenSection] = useState<number>(3);
 
   // Section 2: Festivals
   const [festivals, setFestivals] = useState<Festival[]>([]);
   const [savingFestivals, setSavingFestivals] = useState(false);
   const [uploadingFestivalIndex, setUploadingFestivalIndex] = useState<number | null>(null);
+  const [isDirtyFestivals, setIsDirtyFestivals] = useState(false);
+
+  // Section 3: Voting Period Settings
+  const [votingStartDate, setVotingStartDate] = useState("");
+  const [votingEndDate, setVotingEndDate] = useState("");
+  const [comingSoonMunis, setComingSoonMunis] = useState<any[]>([]);
+  const [savingVoting, setSavingVoting] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<{status: string, text: string}>({status: 'Not Set', text: ''});
+  const [isDirtyVoting, setIsDirtyVoting] = useState(false);
 
   useEffect(() => {
     if (!provinceId) return;
@@ -41,6 +57,90 @@ export default function ProvinceManagePage() {
           setProvince(found);
           // Init Festivals
           setFestivals(found.festivals || []);
+
+          const toDatetimeLocal = (val: any) => {
+            if (!val) return '';
+            // If already exactly YYYY-MM-DDTHH:mm, keep to avoid UTC timezone shifts
+            if (typeof val === 'string' && val.length === 16 && val.includes('T')) return val;
+            
+            let now;
+            if (val && typeof val.toDate === 'function') {
+              now = val.toDate();
+            } else {
+              now = new Date(val);
+            }
+            if (isNaN(now.getTime())) return '';
+
+            const phOffset = 8 * 60; // UTC+8 in minutes
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const phTime = new Date(utc + (phOffset * 60000));
+            
+            const yyyy = phTime.getFullYear();
+            const mm = String(phTime.getMonth() + 1).padStart(2, '0');
+            const dd = String(phTime.getDate()).padStart(2, '0');
+            const hh = String(phTime.getHours()).padStart(2, '0');
+            const min = String(phTime.getMinutes()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+          };
+
+          const getPHTimeNow = () => {
+            const now = new Date();
+            const phOffset = 8 * 60; // UTC+8 in minutes
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const phTime = new Date(utc + (phOffset * 60000));
+            
+            const yyyy = phTime.getFullYear();
+            const mm = String(phTime.getMonth() + 1).padStart(2, '0');
+            const dd = String(phTime.getDate()).padStart(2, '0');
+            const hh = String(phTime.getHours()).padStart(2, '0');
+            const min = String(phTime.getMinutes()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+          };
+
+          const currentPhTime = getPHTimeNow();
+          console.log("getPHTimeNow() value:", currentPhTime); // e.g., 2026-02-25T00:21
+
+          let hasValidFutureVoting = false;
+          let shouldClearFirestore = false;
+
+          if (found.votingResolved) {
+            shouldClearFirestore = true;
+          } else if (found.votingEndDate) {
+            const endDateLocal = toDatetimeLocal(found.votingEndDate);
+            if (endDateLocal && endDateLocal <= currentPhTime) {
+              shouldClearFirestore = true;
+            } else if (endDateLocal > currentPhTime) {
+              hasValidFutureVoting = true;
+            }
+          }
+
+          if (shouldClearFirestore) {
+            try {
+              await provincesService.update(provinceId, {
+                votingResolved: false,
+                votingStartDate: null as any,
+                votingEndDate: null as any
+              });
+            } catch (clearErr) {
+              console.error("Failed to clear expired voting dates", clearErr);
+            }
+          }
+
+          if (hasValidFutureVoting) {
+            setVotingStartDate(toDatetimeLocal(found.votingStartDate));
+            setVotingEndDate(toDatetimeLocal(found.votingEndDate));
+          } else {
+            setVotingStartDate(currentPhTime);
+            setVotingEndDate("");
+          }
+          
+          try {
+             const allMunis = await municipalitiesService.getAll();
+             const comingSoon = allMunis.filter(m => m.provinceId === provinceId && m.status === 'coming_soon').sort((a,b) => (b.voteCount || 0) - (a.voteCount || 0));
+             setComingSoonMunis(comingSoon);
+          } catch (e) {
+             console.error("Failed to fetch munis", e);
+          }
         } else {
           showToast("Province not found.", "error");
           router.push("/provinces");
@@ -56,7 +156,47 @@ export default function ProvinceManagePage() {
     loadData();
   }, [provinceId, router, showToast]);
 
+  const festivalsLoadedRef = React.useRef(false);
+  useEffect(() => {
+    if (!festivalsLoadedRef.current) {
+      festivalsLoadedRef.current = true;
+      return;
+    }
+    setIsDirtyFestivals(true);
+  }, [festivals]);
+
   const setFullState = setProvince; // utility
+
+  useEffect(() => {
+    if (!votingStartDate || !votingEndDate) {
+      setTimeLeft({status: 'Not Set', text: 'Not Set'});
+      return;
+    }
+
+    const checkStatus = () => {
+      const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" }));
+      // votingStartDate and EndDate are already 'YYYY-MM-DDTHH:mm' format
+      const start = new Date(votingStartDate);
+      const end = new Date(votingEndDate); 
+
+      if (now < start) {
+        setTimeLeft({status: 'Not Started', text: 'Voting not yet started'});
+      } else if (now >= start && now <= end) {
+        const diff = end.getTime() - now.getTime();
+        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const m = Math.floor((diff / 1000 / 60) % 60);
+        const s = Math.floor((diff / 1000) % 60);
+        setTimeLeft({status: 'Active', text: `${d}d ${h}h ${m}m ${s}s remaining`});
+      } else {
+        setTimeLeft({status: 'Ended', text: 'Voting has ended'});
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 1000);
+    return () => clearInterval(interval);
+  }, [votingStartDate, votingEndDate]);
 
   if (loading) {
     return (
@@ -400,15 +540,133 @@ export default function ProvinceManagePage() {
                     await provincesService.update(provinceId, { festivals });
                     showToast("Festivals updated successfully.", "success");
                     setFullState(prev => prev ? { ...prev, festivals } : prev);
+                    setIsDirtyFestivals(false);
                   } catch (err) {
                     showToast("Failed to update festivals", "error");
                   } finally {
                     setSavingFestivals(false);
                   }
-                }} disabled={savingFestivals}>
+                }} disabled={savingFestivals || !isDirtyFestivals}>
                   {savingFestivals ? "Saving..." : "Save Festivals"}
                 </Button>
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Accordion 3: Voting Settings */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <button 
+            onClick={() => setOpenSection(openSection === 3 ? 0 : 3)}
+            className="w-full flex items-center justify-between p-5 bg-gray-50/50 hover:bg-gray-50 dark:bg-gray-800/50 dark:hover:bg-gray-800 transition-colors border-b border-gray-100 dark:border-gray-700"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 text-blue-600 rounded-lg dark:bg-blue-500/20 dark:text-blue-400">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-gray-800 dark:text-white/90">Voting Period Settings</h3>
+                <p className="text-xs text-gray-500">Enable province-wide voting for coming soon municipalities.</p>
+              </div>
+            </div>
+            {openSection === 3 ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+          </button>
+
+          {openSection === 3 && (
+            <div className="p-6 space-y-8 bg-gray-50/30 dark:bg-gray-800/30">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                <div>
+                  <Label>Voting Start Date & Time (PH Time)</Label>
+                  <Input
+                    type="datetime-local"
+                    value={votingStartDate}
+                    onChange={(e) => { setVotingStartDate(e.target.value); setIsDirtyVoting(true); }}
+                  />
+                </div>
+                <div>
+                  <Label>Voting End Date & Time (PH Time)</Label>
+                  <Input
+                    type="datetime-local"
+                    value={votingEndDate}
+                    onChange={(e) => { setVotingEndDate(e.target.value); setIsDirtyVoting(true); }}
+                  />
+                </div>
+              </div>
+              
+              <div className="mt-3 text-sm flex items-center gap-2">
+                 <span className="text-gray-500 font-medium tracking-wide border-gray-300 dark:text-gray-400">
+                   Voting Countdown: 
+                 </span>
+                 <span className={`font-semibold ${timeLeft.status === 'Active' ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-300'}`}>
+                   {timeLeft.text}
+                 </span>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+                <h5 className="text-md font-semibold text-gray-800 dark:text-white/90 mb-3">
+                  Coming Soon Municipalities
+                </h5>
+                    {comingSoonMunis.length > 0 ? (
+                      <div className="bg-gray-50 dark:bg-white/[0.02] rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+                        <Table>
+                          <TableHeader className="bg-gray-100/50 dark:bg-white/[0.02] border-b border-gray-100 dark:border-gray-800">
+                            <TableRow>
+                              <TableCell isHeader className="px-4 py-2 font-medium text-xs text-gray-500">Municipality</TableCell>
+                              <TableCell isHeader className="px-4 py-2 font-medium text-xs text-gray-500 text-center">Current Votes</TableCell>
+                              <TableCell isHeader className="px-4 py-2 font-medium text-xs text-gray-500 text-right">Status</TableCell>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody className="divide-y divide-gray-100 dark:divide-white/[0.05]">
+                            {comingSoonMunis.map((muni) => (
+                              <TableRow key={muni.id}>
+                                <TableCell className="px-4 py-2.5 text-sm font-medium text-gray-800 dark:text-white/90">{muni.name}</TableCell>
+                                <TableCell className="px-4 py-2.5 text-sm text-gray-600 text-center font-bold tabular-nums">
+                                  {muni.voteCount?.toLocaleString() || '0'}
+                                </TableCell>
+                                <TableCell className="px-4 py-2.5 text-right">
+                                  <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-md text-[10px] font-semibold uppercase tracking-wider dark:bg-amber-500/20 dark:text-amber-400">
+                                    Coming Soon
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-50 dark:bg-white/[0.02] rounded-xl border border-gray-100 dark:border-gray-800 px-5 py-6 flex flex-col items-center justify-center text-center">
+                        <svg className="w-10 h-10 text-gray-300 dark:text-gray-600 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                        </svg>
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                          No municipalities with Coming Soon status in this province
+                        </span>
+                      </div>
+                    )}
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-gray-100 dark:border-gray-700 mt-6">
+                <Button size="sm" onClick={async () => {
+                  setSavingVoting(true);
+                  try {
+                    await provincesService.update(provinceId, { 
+                       votingStartDate: votingStartDate || undefined, 
+                       votingEndDate: votingEndDate || undefined,
+                       votingResolved: false 
+                    });
+                    showToast("Voting settings updated successfully.", "success");
+                    setFullState(prev => prev ? { ...prev, votingStartDate, votingEndDate, votingResolved: false } : prev);
+                    setIsDirtyVoting(false);
+                  } catch (err) {
+                    showToast("Failed to update voting settings", "error");
+                  } finally {
+                    setSavingVoting(false);
+                  }
+                }} disabled={savingVoting || !isDirtyVoting}>
+                  {savingVoting ? "Saving..." : "Save Voting Settings"}
+                </Button>
+              </div>
+
             </div>
           )}
         </div>

@@ -33,7 +33,7 @@ export default function DefaultInputs() {
           <div className="relative">
             <Select
             options={options}
-            placeholder="Select an option"
+            value=""
             onChange={handleSelectChange}
             className="dark:bg-dark-900"
           />

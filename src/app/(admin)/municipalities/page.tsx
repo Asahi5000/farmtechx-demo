@@ -41,6 +41,7 @@ export default function MunicipalitiesPage() {
   const [formStatus, setFormStatus] = useState<MunicipalityStatus>("disabled");
   const [formDescription, setFormDescription] = useState("");
   const [formHistory, setFormHistory] = useState("");
+  const [isDirty, setIsDirty] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -88,6 +89,7 @@ export default function MunicipalitiesPage() {
     setFormDescription(muni.description || "");
     setFormHistory(muni.history || "");
     setImageFile(null);
+    setIsDirty(false);
     setIsModalOpen(true);
   };
 
@@ -104,6 +106,7 @@ export default function MunicipalitiesPage() {
       const file = e.target.files[0];
       setImageFile(file);
       setFormImage(URL.createObjectURL(file));
+      setIsDirty(true);
     }
   };
 
@@ -163,18 +166,18 @@ export default function MunicipalitiesPage() {
         </h2>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4 w-full sm:w-1/2 justify-end">
           <div className="w-full sm:w-1/2">
-            <Select
-              options={provinces}
-              placeholder="Filter by Province"
-              onChange={(val) => setProvinceFilter(val)}
-            />
-          </div>
-          <div className="w-full sm:w-1/2">
             <Input
               type="text"
               placeholder="Search municipalities..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="w-full sm:w-1/2">
+            <Select
+              options={provinces}
+              placeholder="Filter by Province"
+              onChange={(val) => setProvinceFilter(val)}
             />
           </div>
         </div>
@@ -336,8 +339,8 @@ export default function MunicipalitiesPage() {
                         { value: 'coming_soon', label: 'Coming Soon' },
                         { value: 'disabled', label: 'Disabled' },
                       ]}
-                      defaultValue={formStatus}
-                      onChange={(val) => setFormStatus(val as MunicipalityStatus)}
+                      value={formStatus}
+                      onChange={(val) => { setFormStatus(val as MunicipalityStatus); setIsDirty(true); }}
                     />
                   </div>
 
@@ -346,7 +349,7 @@ export default function MunicipalitiesPage() {
                     <textarea
                       className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-3 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:focus:border-brand-500 dark:text-white min-h-[100px]"
                       value={formDescription}
-                      onChange={(e) => setFormDescription(e.target.value)}
+                      onChange={(e) => { setFormDescription(e.target.value); setIsDirty(true); }}
                     />
                   </div>
 
@@ -355,7 +358,7 @@ export default function MunicipalitiesPage() {
                     <textarea
                       className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-3 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:focus:border-brand-500 dark:text-white min-h-[120px]"
                       value={formHistory}
-                      onChange={(e) => setFormHistory(e.target.value)}
+                      onChange={(e) => { setFormHistory(e.target.value); setIsDirty(true); }}
                     />
                   </div>
                 </div>
@@ -364,7 +367,7 @@ export default function MunicipalitiesPage() {
                   <Button size="sm" variant="outline" onClick={closeModal} type="button">
                     Cancel
                   </Button>
-                  <Button size="sm" type="submit" disabled={saving}>
+                  <Button size="sm" type="submit" disabled={saving || !isDirty}>
                     {saving ? "Saving..." : "Save Changes"}
                   </Button>
                 </div>

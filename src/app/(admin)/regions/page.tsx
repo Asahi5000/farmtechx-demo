@@ -37,6 +37,7 @@ export default function RegionsPage() {
   const [formName, setFormName] = useState("");
   const [formImage, setFormImage] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -70,6 +71,7 @@ export default function RegionsPage() {
     setFormName(region.name);
     setFormImage(region.backgroundImage || "");
     setImageFile(null);
+    setIsDirty(false);
     setIsModalOpen(true);
   };
 
@@ -86,6 +88,7 @@ export default function RegionsPage() {
       const file = e.target.files[0];
       setImageFile(file);
       setFormImage(URL.createObjectURL(file));
+      setIsDirty(true);
     }
   };
 
@@ -135,7 +138,7 @@ export default function RegionsPage() {
           <div className="w-full sm:w-1/2">
             <Select
               options={islandGroups}
-              defaultValue=""
+              value={islandGroupFilter}
               placeholder="Filter by Island Group"
               onChange={(val) => setIslandGroupFilter(val)}
             />
@@ -315,7 +318,7 @@ export default function RegionsPage() {
                     <Input
                       type="text"
                       value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
+                      onChange={(e) => { setFormName(e.target.value); setIsDirty(true); }}
                       required
                     />
                   </div>
@@ -325,7 +328,7 @@ export default function RegionsPage() {
                   <Button size="sm" variant="outline" onClick={closeModal} type="button">
                     Cancel
                   </Button>
-                  <Button size="sm" type="submit" disabled={saving}>
+                  <Button size="sm" type="submit" disabled={saving || !isDirty}>
                     {saving ? "Saving..." : "Save Changes"}
                   </Button>
                 </div>
