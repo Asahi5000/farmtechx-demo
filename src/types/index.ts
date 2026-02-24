@@ -106,7 +106,7 @@ export interface ContentItem {
   // Additional optional fields (most relevant for placesToVisit)
   type?: string; // e.g. Beach, Park, Mountain, Island, Shrine
   pricing?: string; // Optional entrance fee / pricing info
-  activities?: string[]; // e.g. ["Skating", "Snorkeling", "Island Hopping"]
+  estimate?: string; // e.g. "2D 1N", "Half Day", "3-4 Hours"
 }
 
 // Transport option for land/sea/air

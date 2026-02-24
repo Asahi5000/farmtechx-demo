@@ -41,7 +41,7 @@ const emptyContentItem = (): ContentItem => ({
   photos: [],
   type: '',
   pricing: '',
-  activities: []
+  estimate: ''
 });
 
 const emptyTransportOption = (): TransportOption => ({
@@ -418,64 +418,31 @@ export default function MunicipalityManagePage() {
                           onChange={(e) => updateContentItem(setItems, idx, 'type', e.target.value)} 
                         />
                       </div>
+                      <div>
+                        <Label>Estimate</Label>
+                        <Input 
+                          placeholder="e.g. 2D 1N, Half Day, 3-4 Hours" 
+                          value={item.estimate || ''} 
+                          onChange={(e) => updateContentItem(setItems, idx, 'estimate', e.target.value)} 
+                        />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          e.g. 2-3 Hours, Half Day, Full Day, 2D 1N
+                        </p>
+                      </div>
                       <div className="md:col-span-2">
-                        <div className="flex justify-between items-center mb-2">
-                          <Label>Activities</Label>
-                        </div>
-                        <div className="flex gap-2 mb-3">
-                          <Input 
-                            placeholder="e.g. Skating, Snorkeling, Island Hopping" 
-                            id={`activity-input-${item.id}`}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                const input = e.target as HTMLInputElement;
-                                const val = input.value.trim();
-                                if (val) {
-                                  updateContentItem(setItems, idx, 'activities', [...(item.activities || []), val]);
-                                  input.value = '';
-                                }
-                              }
-                            }}
-                          />
-                          <Button type="button" variant="outline" size="sm" onClick={() => {
-                            const input = document.getElementById(`activity-input-${item.id}`) as HTMLInputElement;
-                            const val = input?.value.trim();
-                            if (val) {
-                              updateContentItem(setItems, idx, 'activities', [...(item.activities || []), val]);
-                              input.value = '';
-                            }
-                          }}>
-                            <Plus className="w-4 h-4 mr-1" /> Add
-                          </Button>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {(item.activities || []).map((act, actIdx) => (
-                            <span key={actIdx} className="inline-flex items-center gap-1 bg-brand-50 text-brand-600 px-3 py-1 rounded-full text-sm font-medium dark:bg-brand-500/10 dark:text-brand-400">
-                              {act}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const updated = (item.activities || []).filter((_, i) => i !== actIdx);
-                                  updateContentItem(setItems, idx, 'activities', updated);
-                                }}
-                                className="ml-1 text-brand-400 hover:text-red-500 transition-colors"
-                              >
-                                ×
-                              </button>
-                            </span>
-                          ))}
-                        </div>
+                        <button 
+                          type="button" 
+                          className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-brand-600 transition-colors"
+                          onClick={() => router.push(`/municipalities/${id}/manage-activities/${item.id}`)}
+                        >
+                          <Navigation className="w-4 h-4" /> Manage Activities
+                        </button>
                       </div>
                     </>
                   )}
 
                   {/* Location Details */}
                   <div className="md:col-span-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                      <Label>Address</Label>
-                      <Input value={item.location?.address} onChange={(e) => updateContentLocation(setItems, idx, 'address', e.target.value)} />
-                    </div>
                     <div>
                       <Label>Latitude</Label>
                       <Input type="number" value={item.location?.coordinates.latitude || 0} onChange={(e) => updateContentLocation(setItems, idx, 'latitude', parseFloat(e.target.value))} />
@@ -494,17 +461,48 @@ export default function MunicipalityManagePage() {
                   <div className="md:col-span-2">
                     <div className="flex justify-between items-center mb-2">
                       <Label>Amenities</Label>
-                      <button type="button" onClick={() => handleAddAmenity(setItems, idx)} className="text-xs text-brand-500 font-medium">+ Add Amenity</button>
                     </div>
-                    <div className="flex flex-col gap-2">
+                    <div className="flex gap-2 mb-3">
+                      <Input 
+                        placeholder="e.g. Public Benches, Free WiFi, Family-Friendly" 
+                        id={`amenity-input-${item.id}`}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const input = e.target as HTMLInputElement;
+                            const val = input.value.trim();
+                            if (val) {
+                              const newAmenity = { id: crypto.randomUUID(), icon: 'checkmark-circle-outline', label: val };
+                              updateContentItem(setItems, idx, 'amenities', [...(item.amenities || []), newAmenity]);
+                              input.value = '';
+                            }
+                          }
+                        }}
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => {
+                        const input = document.getElementById(`amenity-input-${item.id}`) as HTMLInputElement;
+                        const val = input?.value.trim();
+                        if (val) {
+                          const newAmenity = { id: crypto.randomUUID(), icon: 'checkmark-circle-outline', label: val };
+                          updateContentItem(setItems, idx, 'amenities', [...(item.amenities || []), newAmenity]);
+                          input.value = '';
+                        }
+                      }}>
+                        <Plus className="w-4 h-4 mr-1" /> Add
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
                       {(item.amenities || []).map((am, amIdx) => (
-                        <div key={am.id} className="flex gap-2">
-                          <Input placeholder="Icon Name (e.g. wifi-outline)" value={am.icon} onChange={(e) => updateAmenity(setItems, idx, amIdx, 'icon', e.target.value)} />
-                          <Input placeholder="Label (e.g. Free Wi-Fi)" value={am.label} onChange={(e) => updateAmenity(setItems, idx, amIdx, 'label', e.target.value)} />
-                          <button onClick={() => removeAmenity(setItems, idx, amIdx)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg dark:hover:bg-red-500/10">
-                            <Trash2 className="w-5 h-5"/>
+                        <span key={am.id} className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-sm font-medium dark:bg-blue-500/10 dark:text-blue-400">
+                          {am.label}
+                          <button
+                            type="button"
+                            onClick={() => removeAmenity(setItems, idx, amIdx)}
+                            className="ml-1 text-blue-400 hover:text-red-500 transition-colors"
+                          >
+                            ×
                           </button>
-                        </div>
+                        </span>
                       ))}
                     </div>
                   </div>
