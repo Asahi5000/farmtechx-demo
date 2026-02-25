@@ -378,7 +378,7 @@ export default function ManageActivitiesPage() {
                     <Input
                       value={formBestTime}
                       onChange={(e) => setFormBestTime(e.target.value)}
-                      placeholder="e.g. Early Morning, Dry Season"
+                      placeholder="e.g. Morning and Afternoon, Dry Season (Nov–May), Weekday mornings"
                     />
                   </div>
 

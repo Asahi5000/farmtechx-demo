@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { municipalitiesService } from "@/config/firestoreService";
 import { Municipality, ContentItem, Transportation, TransportOption } from "@/types";
-import { ArrowLeft, Tag, Loader2, Plus, Trash2, Camera, Navigation, Utensils, Star, Bed, Bus, Ship, Plane, Image as ImageIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Tag, Loader2, Plus, Trash2, Camera, Navigation, Utensils, Star, Bed, Bus, Ship, Plane, Image as ImageIcon, ChevronDown, ChevronUp, Lightbulb, X } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
 import Button from "@/components/ui/button/Button";
 import Input from "@/components/form/input/InputField";
@@ -41,7 +41,8 @@ const emptyContentItem = (): ContentItem => ({
   photos: [],
   type: '',
   pricing: '',
-  estimate: ''
+  estimate: '',
+  bestTimeToDo: ''
 });
 
 const emptyTransportOption = (): TransportOption => ({
@@ -86,13 +87,17 @@ export default function MunicipalityManagePage() {
   // Transportation State
   const [transportation, setTransportation] = useState<Transportation>({ land: [], sea: [], air: [] });
 
+  // Local Tips State
+  const [localTips, setLocalTips] = useState<string[]>([]);
+
   // Accordion State
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     thingsToDo: false,
     placesToVisit: false,
     whereToEat: false,
     whereToStay: false,
-    transportation: false
+    transportation: false,
+    localTips: false
   });
   
   const [activeTransportTab, setActiveTransportTab] = useState<'land'|'sea'|'air'>('land');
@@ -116,6 +121,7 @@ export default function MunicipalityManagePage() {
           setWhereToEat(data.whereToEat || []);
           setWhereToStay(data.whereToStay || []);
           setTransportation(data.transportation || { land: [], sea: [], air: [] });
+          setLocalTips(data.localTips || []);
         } else {
           showToast("Municipality not found", "error");
           router.push("/municipalities");
@@ -142,7 +148,7 @@ export default function MunicipalityManagePage() {
   useEffect(() => {
     if (!contentLoadedRef.current) { contentLoadedRef.current = true; return; }
     setIsDirtyContent(true);
-  }, [thingsToDo, placesToVisit, whereToEat, whereToStay, transportation]);
+  }, [thingsToDo, placesToVisit, whereToEat, whereToStay, transportation, localTips]);
 
   const handleToggleSection = (section: string) => {
     setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -181,7 +187,8 @@ export default function MunicipalityManagePage() {
         placesToVisit,
         whereToEat,
         whereToStay,
-        transportation
+        transportation,
+        localTips
       });
       showToast("Content & Transportation saved successfully", "success");
       setIsDirtyContent(false);
@@ -363,11 +370,15 @@ export default function MunicipalityManagePage() {
                   {/* Basic Details */}
                   <div>
                     <Label>Name</Label>
-                    <Input value={item.name} onChange={(e) => updateContentItem(setItems, idx, 'name', e.target.value)} />
+                    <Input 
+                      placeholder={sectionKey === 'thingsToDo' ? 'e.g. Countryside Cycling, Street Food Crawl' : ''} 
+                      value={item.name} 
+                      onChange={(e) => updateContentItem(setItems, idx, 'name', e.target.value)} 
+                    />
                   </div>
                   <div>
                     <Label>
-                      {title === 'Things to Do' ? 'Entrance / Activity Fee' : 
+                      {title === 'Things to Do' ? 'Expected Cost' : 
                        title === 'Places to Visit' ? 'Entrance Fee' : 
                        'Price Range'}
                     </Label>
@@ -385,17 +396,84 @@ export default function MunicipalityManagePage() {
                       </select>
                     ) : (
                       <Input 
-                        placeholder={title === 'Things to Do' ? 'e.g. Free, ₱50 entrance fee, ₱200/activity' : 'e.g. Free, ₱50 environmental fee, ₱100/person'}
+                        placeholder={title === 'Things to Do' ? 'e.g. Free, Budget-friendly, ₱50-₱100' : 'e.g. Free, ₱50 environmental fee, ₱100/person'}
                         value={item.priceRange} 
                         onChange={(e) => updateContentItem(setItems, idx, 'priceRange', e.target.value)} 
                       />
                     )}
                   </div>
+
+                  {/* Things to Do specific fields */}
+                  {sectionKey === 'thingsToDo' && (
+                    <div className="col-span-1">
+                      <Label>Best Time to Do</Label>
+                      <Input 
+                        placeholder="e.g. Early Morning, Dry Season" 
+                        value={item.bestTimeToDo || ''} 
+                        onChange={(e) => updateContentItem(setItems, idx, 'bestTimeToDo', e.target.value)} 
+                      />
+                    </div>
+                  )}
                   
-                  <div className="col-span-1 border border-gray-200 dark:border-gray-700 p-3 rounded-lg flex flex-col justify-center">
-                    <Label className="mb-2">Initial Rating</Label>
-                    <StarSelector rating={item.rating || 0} onChange={(v) => updateContentItem(setItems, idx, 'rating', v)} />
-                  </div>
+                  {sectionKey !== 'thingsToDo' && (
+                    <div className="col-span-1 border border-gray-200 dark:border-gray-700 p-3 rounded-lg flex flex-col justify-center">
+                      <Label className="mb-2">Initial Rating</Label>
+                      <StarSelector rating={item.rating || 0} onChange={(v) => updateContentItem(setItems, idx, 'rating', v)} />
+                    </div>
+                  )}
+
+                  {/* Where to Eat specific fields: Hours & Cuisine */}
+                  {sectionKey === 'whereToEat' && (
+                    <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Operating Hours</Label>
+                        <Input 
+                          placeholder="e.g. 7AM–10PM, Mon–Sat" 
+                          value={item.operatingHours || ''} 
+                          onChange={(e) => updateContentItem(setItems, idx, 'operatingHours', e.target.value)} 
+                        />
+                      </div>
+                      <div>
+                        <Label>Cuisine Type</Label>
+                        <Input 
+                          placeholder="e.g. Filipino, Seafood, Cafe" 
+                          value={item.cuisineType || ''} 
+                          onChange={(e) => updateContentItem(setItems, idx, 'cuisineType', e.target.value)} 
+                        />
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Use a single word or short category
+                        </p>
+                      </div>
+                      <div className="md:col-span-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                        <Label className="md:col-span-2 uppercase text-xs font-bold text-gray-500 tracking-wider mb-2">Contact Details</Label>
+                        <div>
+                          <Label>Contact Number</Label>
+                          <Input 
+                            placeholder="e.g. 0917-123-4567" 
+                            value={item.contactNumber || ''} 
+                            onChange={(e) => updateContentItem(setItems, idx, 'contactNumber', e.target.value)} 
+                          />
+                        </div>
+                        <div>
+                          <Label>Contact Email</Label>
+                          <Input 
+                            placeholder="e.g. kape.veranda@gmail.com" 
+                            value={item.contactEmail || ''} 
+                            onChange={(e) => updateContentItem(setItems, idx, 'contactEmail', e.target.value)} 
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <Label>Facebook Page</Label>
+                          <Input 
+                            placeholder="e.g. https://facebook.com/kapeveranda" 
+                            value={item.facebookLink || ''} 
+                            onChange={(e) => updateContentItem(setItems, idx, 'facebookLink', e.target.value)} 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   
                   <div className="md:col-span-2">
                     <Label>Description</Label>
@@ -407,108 +485,176 @@ export default function MunicipalityManagePage() {
                     />
                   </div>
 
-                  {/* Places to Visit specific fields */}
-                  {sectionKey === 'placesToVisit' && (
+                  {/* Type and Estimate (Places & Things to Do) */}
+                  {(sectionKey === 'placesToVisit' || sectionKey === 'thingsToDo') && (
                     <>
                       <div>
                         <Label>Type</Label>
                         <Input 
-                          placeholder="e.g. Beach, Park, Mountain, Island, Shrine" 
+                          placeholder={sectionKey === 'thingsToDo' ? 'e.g. Outdoor, Cultural, Food, Water' : 'e.g. Beach, Park, Mountain, Island, Shrine'} 
                           value={item.type || ''} 
                           onChange={(e) => updateContentItem(setItems, idx, 'type', e.target.value)} 
                         />
+                        {sectionKey === 'thingsToDo' && (
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            Use a single word or short category
+                          </p>
+                        )}
                       </div>
                       <div>
-                        <Label>Estimate</Label>
+                        <Label>Duration</Label>
                         <Input 
-                          placeholder="e.g. 2D 1N, Half Day, 3-4 Hours" 
+                          placeholder="e.g. 30 min, 1-2 hrs, Half Day" 
                           value={item.estimate || ''} 
                           onChange={(e) => updateContentItem(setItems, idx, 'estimate', e.target.value)} 
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          e.g. 2-3 Hours, Half Day, Full Day, 2D 1N
+                          Keep this short to prevent layout stretching in the app
                         </p>
-                      </div>
-                      <div className="md:col-span-2">
-                        <button 
-                          type="button" 
-                          className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-brand-600 transition-colors"
-                          onClick={() => router.push(`/municipalities/${id}/manage-activities/${item.id}`)}
-                        >
-                          <Navigation className="w-4 h-4" /> Manage Activities
-                        </button>
                       </div>
                     </>
                   )}
 
-                  {/* Location Details */}
-                  <div className="md:col-span-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label>Latitude</Label>
-                      <Input type="number" value={item.location?.coordinates.latitude || 0} onChange={(e) => updateContentLocation(setItems, idx, 'latitude', parseFloat(e.target.value))} />
-                    </div>
-                    <div>
-                      <Label>Longitude</Label>
-                      <Input type="number" value={item.location?.coordinates.longitude || 0} onChange={(e) => updateContentLocation(setItems, idx, 'longitude', parseFloat(e.target.value))} />
-                    </div>
+                  {/* Places to Visit specific fields */}
+                  {sectionKey === 'placesToVisit' && (
                     <div className="md:col-span-2">
-                      <Label>Google Maps URL</Label>
-                      <Input value={item.location?.mapUrl || ''} onChange={(e) => updateContentLocation(setItems, idx, 'mapUrl', e.target.value)} />
+                      <button 
+                        type="button" 
+                        className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-brand-600 transition-colors"
+                        onClick={() => router.push(`/municipalities/${id}/manage-activities/${item.id}`)}
+                      >
+                        <Navigation className="w-4 h-4" /> Manage Activities
+                      </button>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Amenities */}
-                  <div className="md:col-span-2">
-                    <div className="flex justify-between items-center mb-2">
-                      <Label>Amenities</Label>
+                  {/* Location Details (Hide for Things to Do) */}
+                  {sectionKey !== 'thingsToDo' && (
+                    <div className="md:col-span-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                      <Label className="md:col-span-2 uppercase text-xs font-bold text-gray-500 tracking-wider mb-2">Location Details</Label>
+                      <div>
+                        <Label>Latitude</Label>
+                        <Input type="number" value={item.location?.coordinates.latitude || 0} onChange={(e) => updateContentLocation(setItems, idx, 'latitude', parseFloat(e.target.value))} />
+                      </div>
+                      <div>
+                        <Label>Longitude</Label>
+                        <Input type="number" value={item.location?.coordinates.longitude || 0} onChange={(e) => updateContentLocation(setItems, idx, 'longitude', parseFloat(e.target.value))} />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Label>Google Maps URL</Label>
+                        <Input value={item.location?.mapUrl || ''} onChange={(e) => updateContentLocation(setItems, idx, 'mapUrl', e.target.value)} />
+                      </div>
                     </div>
-                    <div className="flex gap-2 mb-3">
-                      <Input 
-                        placeholder="e.g. Public Benches, Free WiFi, Family-Friendly" 
-                        id={`amenity-input-${item.id}`}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            const input = e.target as HTMLInputElement;
-                            const val = input.value.trim();
-                            if (val) {
-                              const newAmenity = { id: crypto.randomUUID(), icon: 'checkmark-circle-outline', label: val };
-                              updateContentItem(setItems, idx, 'amenities', [...(item.amenities || []), newAmenity]);
-                              input.value = '';
+                  )}
+
+                  {/* Amenities (Hide for Things to Do) */}
+                  {sectionKey !== 'thingsToDo' && (
+                    <div className="md:col-span-2">
+                      <div className="flex justify-between items-center mb-2">
+                        <Label>Amenities</Label>
+                      </div>
+                      <div className="flex gap-2 mb-3">
+                        <Input 
+                          placeholder="e.g. Public Benches, Free WiFi, Family-Friendly" 
+                          id={`amenity-input-${item.id}`}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const input = e.target as HTMLInputElement;
+                              const val = input.value.trim();
+                              if (val) {
+                                const newAmenity = { id: crypto.randomUUID(), icon: 'checkmark-circle-outline', label: val };
+                                updateContentItem(setItems, idx, 'amenities', [...(item.amenities || []), newAmenity]);
+                                input.value = '';
+                              }
                             }
+                          }}
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={() => {
+                          const input = document.getElementById(`amenity-input-${item.id}`) as HTMLInputElement;
+                          const val = input?.value.trim();
+                          if (val) {
+                            const newAmenity = { id: crypto.randomUUID(), icon: 'checkmark-circle-outline', label: val };
+                            updateContentItem(setItems, idx, 'amenities', [...(item.amenities || []), newAmenity]);
+                            input.value = '';
                           }
-                        }}
-                      />
-                      <Button type="button" variant="outline" size="sm" onClick={() => {
-                        const input = document.getElementById(`amenity-input-${item.id}`) as HTMLInputElement;
-                        const val = input?.value.trim();
-                        if (val) {
-                          const newAmenity = { id: crypto.randomUUID(), icon: 'checkmark-circle-outline', label: val };
-                          updateContentItem(setItems, idx, 'amenities', [...(item.amenities || []), newAmenity]);
-                          input.value = '';
-                        }
-                      }}>
-                        <Plus className="w-4 h-4 mr-1" /> Add
-                      </Button>
+                        }}>
+                          <Plus className="w-4 h-4 mr-1" /> Add
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(item.amenities || []).map((am, amIdx) => (
+                          <span key={am.id} className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-sm font-medium dark:bg-blue-500/10 dark:text-blue-400">
+                            {am.label}
+                            <button
+                              type="button"
+                              onClick={() => removeAmenity(setItems, idx, amIdx)}
+                              className="ml-1 text-blue-400 hover:text-red-500 transition-colors"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(item.amenities || []).map((am, amIdx) => (
-                        <span key={am.id} className="inline-flex items-center gap-1 bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-sm font-medium dark:bg-blue-500/10 dark:text-blue-400">
-                          {am.label}
-                          <button
-                            type="button"
-                            onClick={() => removeAmenity(setItems, idx, amIdx)}
-                            className="ml-1 text-blue-400 hover:text-red-500 transition-colors"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
+                  )}
+
+                  {/* Must-Try Dish (Where to Eat specific) */}
+                  {sectionKey === 'whereToEat' && (
+                    <div className="md:col-span-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                      <Label className="md:col-span-2 uppercase text-xs font-bold text-gray-500 tracking-wider mb-2">Must-Try Dish</Label>
+                      <div>
+                          <Label>Must-Try Dish Name</Label>
+                          <Input 
+                            placeholder="e.g. Bicol Express, Grilled Tuna Belly" 
+                            value={item.mustTryDish || ''} 
+                            onChange={(e) => updateContentItem(setItems, idx, 'mustTryDish', e.target.value)} 
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label>Must-Try Dish Image</Label>
+                          <label className="relative w-full h-32 rounded-xl overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300 group cursor-pointer dark:bg-gray-800 dark:border-gray-600 flex items-center justify-center">
+                            {item.mustTryDishImage ? (
+                              <img src={item.mustTryDishImage} className="w-full h-full object-cover" alt="Must Try Dish" />
+                            ) : (
+                              <Camera className="w-8 h-8 text-gray-400" />
+                            )}
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              {uploadingItemId === `musttry_${item.id}` ? <Loader2 className="w-6 h-6 animate-spin text-white" /> : <Camera className="w-8 h-8 text-white" />}
+                            </div>
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              className="hidden" 
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                setUploadingItemId(`musttry_${item.id}`);
+                                try {
+                                  const url = await uploadFile(file, 'municipalities/content');
+                                  updateContentItem(setItems, idx, 'mustTryDishImage', url);
+                                } catch (err) {
+                                  showToast("Failed to upload image", "error");
+                                } finally {
+                                  setUploadingItemId(null);
+                                }
+                              }}
+                            />
+                          </label>
+                        </div>
+                        <div className="md:col-span-2">
+                          <Label>Must-Try Dish Description</Label>
+                          <Input 
+                            placeholder="e.g. Crispy battered fish served with fries and house sauce" 
+                            value={item.mustTryDishDescription || ''} 
+                            onChange={(e) => updateContentItem(setItems, idx, 'mustTryDishDescription', e.target.value)} 
+                          />
+                        </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Photo Gallery */}
-                  <div className="md:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-4">
+                  <div className="md:col-span-2 border-t border-gray-200 dark:border-gray-700 pt-6 mt-2">
                     <Label>Photo Gallery</Label>
                     <div className="flex flex-wrap gap-4 mt-2">
                       {(item.photos || []).map((url, pIdx) => (
@@ -530,16 +676,18 @@ export default function MunicipalityManagePage() {
                         <input
                           type="file"
                           accept="image/*"
+                          multiple
                           className="hidden"
                           onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
+                            const files = e.target.files;
+                            if (!files || files.length === 0) return;
                             setUploadingItemId(`gallery_${item.id}`);
                             try {
-                              const url = await uploadFile(file, 'municipalities/gallery');
-                              updateContentItem(setItems, idx, 'photos', [...(item.photos || []), url]);
+                              const uploadPromises = Array.from(files).map(file => uploadFile(file, 'municipalities/gallery'));
+                              const urls = await Promise.all(uploadPromises);
+                              updateContentItem(setItems, idx, 'photos', [...(item.photos || []), ...urls]);
                             } catch (err) {
-                              showToast("Failed to upload photo", "error");
+                              showToast("Failed to upload photos", "error");
                             } finally {
                               setUploadingItemId(null);
                             }
@@ -669,6 +817,88 @@ export default function MunicipalityManagePage() {
                 </Button>
               </div>
             </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderLocalTips = () => {
+    const isOpen = openSections['localTips'];
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm dark:border-white/[0.05] dark:bg-white/[0.03]">
+        <button 
+          onClick={() => handleToggleSection('localTips')}
+          className="w-full flex items-center justify-between p-5 hover:bg-gray-50 transition-colors dark:hover:bg-white/[0.02]"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-500 dark:bg-brand-500/10 dark:text-brand-400">
+              <Lightbulb className="w-5 h-5" />
+            </div>
+            <div className="text-left">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white/90">
+                Local Tips
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {localTips.length} tip{localTips.length !== 1 && 's'}
+              </p>
+            </div>
+          </div>
+          {isOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+        </button>
+
+        {isOpen && (
+          <div className="p-5 border-t border-gray-100 dark:border-white/[0.05] bg-gray-50/50 dark:bg-transparent space-y-4">
+            <div className="flex flex-col gap-3 mb-4">
+              <textarea
+                id="local-tip-input"
+                rows={3}
+                placeholder="e.g. Bring extra water since the trail has limited shade during midday. Strong Globe signal available at the peak."
+                className="w-full rounded-lg border border-gray-300 bg-transparent px-4 py-3 outline-none focus:border-brand-500 dark:border-gray-700 dark:bg-gray-800 dark:focus:border-brand-500 dark:text-white"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    const input = e.target as HTMLTextAreaElement;
+                    const val = input.value.trim();
+                    if (val) {
+                      setLocalTips([...localTips, val]);
+                      input.value = '';
+                    }
+                  }
+                }}
+              />
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={() => {
+                  const input = document.getElementById('local-tip-input') as HTMLTextAreaElement;
+                  const val = input?.value.trim();
+                  if (val) {
+                    setLocalTips([...localTips, val]);
+                    input.value = '';
+                  }
+                }}>
+                  <Plus className="w-4 h-4 mr-1" /> Add Tip
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {localTips.map((tip, idx) => (
+                <span key={idx} className="inline-flex items-center gap-1 bg-brand-50 text-brand-600 px-3 py-1.5 rounded-full text-sm font-medium dark:bg-brand-500/10 dark:text-brand-400">
+                  {tip}
+                  <button
+                    type="button"
+                    onClick={() => setLocalTips(localTips.filter((_, i) => i !== idx))}
+                    className="ml-1 text-brand-400 hover:text-red-500 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            {localTips.length === 0 && (
+              <p className="text-sm text-gray-500 italic dark:text-gray-400">
+                No local tips added yet.
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -818,6 +1048,7 @@ export default function MunicipalityManagePage() {
       {renderContentItems('Where to Eat', <Utensils className="w-5 h-5" />, 'whereToEat', whereToEat, setWhereToEat)}
       {renderContentItems('Where to Stay', <Bed className="w-5 h-5" />, 'whereToStay', whereToStay, setWhereToStay)}
       {renderTransportOptions()}
+      {renderLocalTips()}
 
       <div className="flex justify-end pt-8">
         <Button onClick={handleSaveContentAndTransport} disabled={savingContent || !isDirtyContent} className="px-8 shadow-sm">

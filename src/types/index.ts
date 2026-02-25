@@ -107,6 +107,17 @@ export interface ContentItem {
   type?: string; // e.g. Beach, Park, Mountain, Island, Shrine
   pricing?: string; // Optional entrance fee / pricing info
   estimate?: string; // e.g. "2D 1N", "Half Day", "3-4 Hours"
+  bestTimeToDo?: string; // e.g. "Evening", "During Summer", "Year-round"
+
+  // Where to Eat specific fields
+  operatingHours?: string;
+  cuisineType?: string;
+  contactNumber?: string;
+  contactEmail?: string;
+  facebookLink?: string;
+  mustTryDish?: string;
+  mustTryDishImage?: string;
+  mustTryDishDescription?: string;
 }
 
 // Transport option for land/sea/air
@@ -157,6 +168,7 @@ export interface Municipality {
   whereToEat: ContentItem[];
   whereToStay: ContentItem[];
   transportation: Transportation;
+  localTips?: string[];
   // Coming Soon voting field (voting dates are on Province level)
   voteCount?: number; // Track user votes
   // Featured / Popular Destinations
