@@ -118,6 +118,13 @@ export interface ContentItem {
   mustTryDish?: string;
   mustTryDishImage?: string;
   mustTryDishDescription?: string;
+
+  // Where to Stay specific fields
+  propertyType?: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  startingPrice?: string;
+  roomTypes?: string[];
 }
 
 // Transport option for land/sea/air
