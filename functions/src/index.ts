@@ -124,7 +124,93 @@ export const getRouteDirections = functions.https.onCall(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. generateTripSuggestions
+// 2. getTravelModes
+//    Given an origin (GPS) and destination (spot coords), returns travel time
+//    estimates for driving, walking, bicycling, and transit using the
+//    Google Distance Matrix API.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getTravelModes = functions.https.onCall(
+  async (data: {
+    originLat: number;
+    originLng: number;
+    destLat: number;
+    destLng: number;
+  }, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "User must be authenticated.");
+    }
+
+    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+      throw new functions.https.HttpsError("failed-precondition", "GOOGLE_MAPS_API_KEY not set.");
+    }
+
+    const { originLat, originLng, destLat, destLng } = data;
+    console.log(`[getTravelModes] Called. Origin: ${originLat},${originLng} | Dest: ${destLat},${destLng}`);
+
+    const modesMap: Record<string, string> = {
+      "driving": "DRIVE",
+      "walking": "WALK",
+      "bicycling": "BICYCLE",
+      "transit": "TRANSIT"
+    };
+
+    const results: Record<string, string | null> = {};
+
+    const formatDuration = (secondsStr: string) => {
+      const totalSeconds = parseInt(secondsStr.replace('s', ''), 10);
+      if (isNaN(totalSeconds)) return null;
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      if (hours === 0) return `${minutes} min`;
+      if (minutes === 0) return `${hours} hr`;
+      return `${hours} hr ${minutes} min`;
+    };
+
+    await Promise.all(
+      Object.keys(modesMap).map(async (modeKey) => {
+        try {
+          const resp = await axios.post(
+            "https://routes.googleapis.com/directions/v2:computeRoutes",
+            {
+              origin: { location: { latLng: { latitude: originLat, longitude: originLng } } },
+              destination: { location: { latLng: { latitude: destLat, longitude: destLng } } },
+              travelMode: modesMap[modeKey]
+            },
+            {
+              headers: {
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": apiKey,
+                "X-Goog-FieldMask": "routes.duration"
+              }
+            }
+          );
+          
+          const duration = resp.data?.routes?.[0]?.duration;
+          if (duration) {
+            results[modeKey] = formatDuration(duration);
+          } else {
+            results[modeKey] = null;
+          }
+        } catch (err: any) {
+          console.error(`[getTravelModes] Routes API failed for ${modeKey}:`, err?.response?.data || err.message);
+          results[modeKey] = null;
+        }
+      })
+    );
+    
+    console.log('[getTravelModes] Final Results:', results);
+    return results;
+
+    return {
+      driving:  results["driving"],
+      walking:  results["walking"],
+      bicycling: results["bicycling"],
+      transit:  results["transit"],
+    };
+  }
+);
+
 //    Pulls content items from a municipality, ranks by rating, and distributes
 //    them across days following the algorithm:
 //      - Per day: 1 placesToVisit + 1 whereToEat + 1 whereToStay (min)

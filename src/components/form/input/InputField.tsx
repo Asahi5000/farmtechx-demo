@@ -11,7 +11,7 @@ interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, '
   className?: string;
   min?: string;
   max?: string;
-  step?: number;
+  step?: number | string;
   disabled?: boolean;
   success?: boolean;
   error?: boolean;

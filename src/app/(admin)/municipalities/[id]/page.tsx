@@ -624,8 +624,8 @@ export default function MunicipalityManagePage() {
                         {sectionKey !== 'thingsToDo' && (
                           <div className="md:col-span-2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                             <Label className="md:col-span-2 uppercase text-xs font-bold text-gray-500 tracking-wider mb-2">Location Details</Label>
-                            <div><Label>Latitude</Label><Input type="number" value={item.location?.coordinates.latitude || 0} onChange={(e) => updateContentLocation(setItems, idx, 'latitude', parseFloat(e.target.value))} /></div>
-                            <div><Label>Longitude</Label><Input type="number" value={item.location?.coordinates.longitude || 0} onChange={(e) => updateContentLocation(setItems, idx, 'longitude', parseFloat(e.target.value))} /></div>
+                            <div><Label>Latitude</Label><Input type="number" step="any" value={item.location?.coordinates.latitude || 0} onChange={(e) => updateContentLocation(setItems, idx, 'latitude', parseFloat(e.target.value))} /></div>
+                            <div><Label>Longitude</Label><Input type="number" step="any" value={item.location?.coordinates.longitude || 0} onChange={(e) => updateContentLocation(setItems, idx, 'longitude', parseFloat(e.target.value))} /></div>
                             <div className="md:col-span-2"><Label>Google Maps URL</Label><Input value={item.location?.mapUrl || ''} onChange={(e) => updateContentLocation(setItems, idx, 'mapUrl', e.target.value)} /></div>
                           </div>
                         )}
