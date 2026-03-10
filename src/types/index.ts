@@ -250,6 +250,18 @@ export interface FeaturedAttraction {
   updatedAt: Timestamp;
 }
 
+// Featured Province (admin-ranked homepage section)
+export interface FeaturedProvince {
+  id: string;
+  provinceId: string;
+  provinceName: string;
+  tagline: string;
+  image: string;
+  featuredOrder: number;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
 export interface Review {
   id: string;
   attractionId: string;

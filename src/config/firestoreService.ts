@@ -279,6 +279,50 @@ export const featuredAttractionsService = {
   },
 };
 
+// Featured Provinces CRUD (admin-ranked homepage section)
+const FEATURED_PROVINCES_COLLECTION = 'featuredProvinces';
+
+export interface FeaturedProvince {
+  id: string;
+  provinceId: string;
+  provinceName: string;
+  tagline: string;
+  image: string;
+  featuredOrder: number;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export const featuredProvincesService = {
+  async getAll(): Promise<FeaturedProvince[]> {
+    const q = query(collection(db, FEATURED_PROVINCES_COLLECTION), orderBy('featuredOrder'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeaturedProvince));
+  },
+
+  async create(data: Omit<FeaturedProvince, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    const docRef = await addDoc(collection(db, FEATURED_PROVINCES_COLLECTION), {
+      ...data,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    return docRef.id;
+  },
+
+  async update(id: string, data: Partial<FeaturedProvince>): Promise<void> {
+    const docRef = doc(db, FEATURED_PROVINCES_COLLECTION, id);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    const docRef = doc(db, FEATURED_PROVINCES_COLLECTION, id);
+    await deleteDoc(docRef);
+  },
+};
+
 // Dashboard Metrics
 export const dashboardService = {
   async getMetrics() {

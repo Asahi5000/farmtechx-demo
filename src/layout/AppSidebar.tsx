@@ -56,6 +56,11 @@ const navItems: NavItem[] = [
     name: "Popular Destinations",
     path: "/popular-destinations",
   },
+  {
+    icon: <ListIcon />,
+    name: "Featured Provinces",
+    path: "/featured-provinces",
+  },
 ];
 
 const othersItems: NavItem[] = [];
