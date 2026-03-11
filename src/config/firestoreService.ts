@@ -323,6 +323,50 @@ export const featuredProvincesService = {
   },
 };
 
+// Top Experiences CRUD (admin-ranked homepage section)
+const TOP_EXPERIENCES_COLLECTION = 'topExperiences';
+
+export interface TopExperience {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  image: string;
+  featuredOrder: number;
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export const topExperiencesService = {
+  async getAll(): Promise<TopExperience[]> {
+    const q = query(collection(db, TOP_EXPERIENCES_COLLECTION), orderBy('featuredOrder'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TopExperience));
+  },
+
+  async create(data: Omit<TopExperience, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    const docRef = await addDoc(collection(db, TOP_EXPERIENCES_COLLECTION), {
+      ...data,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    });
+    return docRef.id;
+  },
+
+  async update(id: string, data: Partial<TopExperience>): Promise<void> {
+    const docRef = doc(db, TOP_EXPERIENCES_COLLECTION, id);
+    await updateDoc(docRef, {
+      ...data,
+      updatedAt: Timestamp.now(),
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    const docRef = doc(db, TOP_EXPERIENCES_COLLECTION, id);
+    await deleteDoc(docRef);
+  },
+};
+
 // Dashboard Metrics
 export const dashboardService = {
   async getMetrics() {

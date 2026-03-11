@@ -61,6 +61,11 @@ const navItems: NavItem[] = [
     name: "Featured Provinces",
     path: "/featured-provinces",
   },
+  {
+    icon: <CalenderIcon />,
+    name: "Top Experiences",
+    path: "/top-experiences",
+  },
 ];
 
 const othersItems: NavItem[] = [];
