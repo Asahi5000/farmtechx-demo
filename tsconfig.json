@@ -38,6 +38,9 @@
   "exclude": [
     "node_modules",
     "check_muni.ts",
-    "scripts/**/*"
+    "scripts/**/*",
+    "functions/**/*",
+    "*.js",
+    "*.mjs"
   ]
 }
