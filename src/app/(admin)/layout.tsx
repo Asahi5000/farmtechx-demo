@@ -1,10 +1,12 @@
 "use client";
 
 import { useSidebar } from "@/context/SidebarContext";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
-import React from "react";
+import React, { useEffect } from "react";
 
 export default function AdminLayout({
   children,
@@ -12,6 +14,23 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/signin");
+    }
+  }, [user, loading, router]);
+
+  // Loading state prevents flashing the dashboard before redirect
+  if (loading || (!user && !loading)) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-white dark:bg-gray-900">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-brand-500 border-t-transparent"></div>
+      </div>
+    );
+  }
 
   // Dynamic class for main content margin based on sidebar state
   const mainContentMargin = isMobileOpen
