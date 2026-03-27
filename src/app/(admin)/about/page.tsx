@@ -127,7 +127,7 @@ export default function AboutPage() {
         <div className="flex flex-col items-center text-center">
           <div className="w-48 h-48 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-2xl shadow-lg flex items-center justify-center p-6 mb-4 border-2 border-gray-200 dark:border-gray-600">
             <img
-              src="/images/institution/aclc-logo.jpg"
+              src="/images/institution/aclc-logo.png"
               alt="ACLC College of Daet"
               className="w-full h-full object-contain"
             />
