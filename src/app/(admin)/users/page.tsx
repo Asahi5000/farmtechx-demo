@@ -8,7 +8,9 @@ import type { UserRecord } from "@/types";
 export default function UsersPage() {
   const [users, setUsers] = useState<Record<string, UserRecord>>({});
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [editTarget, setEditTarget] = useState<UserRecord | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Form state
@@ -16,6 +18,11 @@ export default function UsersPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"Admin" | "Staff">("Staff");
+
+  // Edit form state
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState<"Admin" | "Staff">("Staff");
+  const [editPassword, setEditPassword] = useState("");
 
   useEffect(() => {
     const r = ref(db, "farmtechx/users");
@@ -56,6 +63,39 @@ export default function UsersPage() {
     } catch (err: any) {
       alert(err.message);
     }
+  };
+
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget) return;
+    setLoading(true);
+    try {
+      const updates: any = {
+        name: editName,
+        role: editRole,
+      };
+      await set(ref(db, `farmtechx/users/${editTarget.uid}`), {
+        ...editTarget,
+        ...updates,
+      });
+      setShowEditModal(false);
+      setEditTarget(null);
+      setEditName("");
+      setEditRole("Staff");
+      setEditPassword("");
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEditModal = (user: UserRecord) => {
+    setEditTarget(user);
+    setEditName(user.name);
+    setEditRole(user.role);
+    setEditPassword("");
+    setShowEditModal(true);
   };
 
   const userList = Object.values(users);
@@ -104,6 +144,12 @@ export default function UsersPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3 text-right">
+                    <button
+                      onClick={() => openEditModal(u)}
+                      className="text-blue-500 hover:text-blue-700 text-xs font-semibold px-3 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors mr-2"
+                    >
+                      Edit
+                    </button>
                     <button
                       onClick={() => setDeleteTarget(u.uid)}
                       className="text-red-500 hover:text-red-700 text-xs font-semibold px-3 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -180,6 +226,65 @@ export default function UsersPage() {
                 >
                   {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                   Add User
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {showEditModal && editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Edit User</h3>
+            <form onSubmit={handleEditUser} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Role</label>
+                <select
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as "Admin" | "Staff")}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:text-white"
+                >
+                  <option value="Staff">Staff</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password (optional)</label>
+                <input
+                  type="password"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  placeholder="Leave blank to keep current"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  Update User
                 </button>
               </div>
             </form>

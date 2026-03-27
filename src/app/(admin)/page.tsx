@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { useAuth } from "@/context/AuthContext";
 import { listenTo, listenToLatestWaterReadings, PATHS } from "@/config/realtimeService";
 import type { SoilData, RainData, WaterLevel, WaterSensorReading } from "@/types";
 
@@ -37,11 +38,18 @@ function StatusBadge({ label, active, trueLabel = "YES", falseLabel = "NO" }: { 
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [latest, setLatest] = useState<WaterSensorReading | null>(null);
   const [soil, setSoil] = useState<SoilData | null>(null);
   const [rain, setRain] = useState<RainData | null>(null);
   const [waterLevel, setWaterLevel] = useState<WaterLevel | null>(null);
   const [history, setHistory] = useState<{ key: string; value: WaterSensorReading }[]>([]);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const unsubs = [
@@ -92,6 +100,23 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Welcome Card */}
+      <div className="bg-gradient-to-r from-brand-500 to-brand-600 rounded-xl p-6 shadow-lg text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold mb-1">Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}!</h1>
+            <p className="text-brand-100 text-sm">
+              Role: <span className="font-semibold">{user?.email?.includes('admin') ? 'Admin' : 'Staff'}</span>
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-brand-100 text-sm">Current Date & Time</p>
+            <p className="text-xl font-semibold">{currentTime.toLocaleDateString()}</p>
+            <p className="text-lg">{currentTime.toLocaleTimeString()}</p>
+          </div>
+        </div>
+      </div>
+
       <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h2>
 
       {/* Water Quality */}
@@ -125,10 +150,13 @@ export default function DashboardPage() {
       {/* Rain + Water Level */}
       <div>
         <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">🌧 Environment</h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <StatusBadge label="Rain Status" active={rain?.isRaining ?? null} trueLabel="Raining" falseLabel="Not Raining" />
           <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Water Level</span>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">💧</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Water Level</span>
+            </div>
             {waterLevel?.status ? (
               <span className={`px-3 py-1 rounded-full text-xs font-semibold ${waterLevelColor[waterLevel.status] ?? "bg-gray-100 text-gray-500"}`}>
                 {waterLevel.status}

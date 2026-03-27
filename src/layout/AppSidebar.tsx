@@ -46,6 +46,11 @@ const navItems: NavItem[] = [
     name: "Users",
     path: "/users",
   },
+  {
+    icon: <PageIcon />,
+    name: "About",
+    path: "/about",
+  },
 ];
 
 const othersItems: NavItem[] = [];
