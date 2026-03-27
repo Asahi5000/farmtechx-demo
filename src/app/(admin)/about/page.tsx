@@ -125,11 +125,13 @@ export default function AboutPage() {
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-6">
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 text-center">Institution</h3>
         <div className="flex flex-col items-center text-center">
-          <img
-            src="/images/institution/aclc-logo.jpg"
-            alt="ACLC College of Daet"
-            className="w-32 h-32 object-contain mb-4"
-          />
+          <div className="w-48 h-48 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-2xl shadow-lg flex items-center justify-center p-6 mb-4 border-2 border-gray-200 dark:border-gray-600">
+            <img
+              src="/images/institution/aclc-logo.jpg"
+              alt="ACLC College of Daet"
+              className="w-full h-full object-contain"
+            />
+          </div>
           <p className="font-bold text-xl text-gray-900 dark:text-white mb-2">ACLC College of Daet</p>
           <p className="text-sm text-gray-600 dark:text-gray-400 max-w-2xl">
             Developed as part of an academic research project focused on sustainable agriculture and IoT-enabled farming solutions.
