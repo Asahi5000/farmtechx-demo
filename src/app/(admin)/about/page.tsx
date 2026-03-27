@@ -123,19 +123,17 @@ export default function AboutPage() {
 
       {/* Institution */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-6">
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Institution</h3>
-        <div className="flex items-start gap-4">
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 text-center">Institution</h3>
+        <div className="flex flex-col items-center text-center">
           <img
             src="/images/institution/aclc-logo.jpg"
-            alt="ACLC College"
-            className="w-20 h-20 object-contain"
+            alt="ACLC College of Daet"
+            className="w-32 h-32 object-contain mb-4"
           />
-          <div>
-            <p className="font-semibold text-gray-900 dark:text-white">ACLC College</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Developed as part of an academic research project focused on sustainable agriculture and IoT-enabled farming solutions.
-            </p>
-          </div>
+          <p className="font-bold text-xl text-gray-900 dark:text-white mb-2">ACLC College of Daet</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 max-w-2xl">
+            Developed as part of an academic research project focused on sustainable agriculture and IoT-enabled farming solutions.
+          </p>
         </div>
       </div>
 
