@@ -33,38 +33,18 @@ const navItems: NavItem[] = [
   },
   {
     icon: <BoxCubeIcon />,
-    name: "Island Groups",
-    path: "/island-groups",
-  },
-  {
-    icon: <PageIcon />,
-    name: "Regions",
-    path: "/regions",
-  },
-  {
-    icon: <ListIcon />,
-    name: "Provinces",
-    path: "/provinces",
-  },
-  {
-    icon: <TableIcon />,
-    name: "Municipalities",
-    path: "/municipalities",
-  },
-  {
-    icon: <PieChartIcon />,
-    name: "Popular Destinations",
-    path: "/popular-destinations",
-  },
-  {
-    icon: <ListIcon />,
-    name: "Featured Provinces",
-    path: "/featured-provinces",
+    name: "Irrigation",
+    path: "/irrigation",
   },
   {
     icon: <CalenderIcon />,
-    name: "Top Experiences",
-    path: "/top-experiences",
+    name: "History",
+    path: "/history",
+  },
+  {
+    icon: <UserCircleIcon />,
+    name: "Users",
+    path: "/users",
   },
 ];
 

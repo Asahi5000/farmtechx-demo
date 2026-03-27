@@ -59,7 +59,7 @@ export default function SignInForm() {
               Admin Sign In
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Welcome back! This portal is for LayasPinas administrators only.
+              Welcome back! This portal is for FarmTechXBaluzo administrators only.
             </p>
           </div>
           <div>
