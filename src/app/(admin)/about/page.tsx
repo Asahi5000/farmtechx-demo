@@ -87,16 +87,36 @@ export default function AboutPage() {
       {/* Developer Credits */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-6">
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Developer Credits</h3>
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-brand-400 to-brand-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-              JO
-            </div>
-            <div>
-              <p className="font-semibold text-gray-900 dark:text-white">John Owen Baluzo</p>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Lead Developer & System Architect</p>
-              <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Full-stack development, IoT integration, database design</p>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="flex flex-col items-center text-center">
+            <img
+              src="/images/developers/obias.jpg"
+              alt="John Owen Baluzo"
+              className="w-24 h-24 rounded-full object-cover mb-3 border-4 border-brand-500"
+            />
+            <p className="font-semibold text-gray-900 dark:text-white">John Owen Baluzo</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Lead Developer</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Full-stack & IoT Integration</p>
+          </div>
+          <div className="flex flex-col items-center text-center">
+            <img
+              src="/images/developers/avendano.jpg"
+              alt="Developer 2"
+              className="w-24 h-24 rounded-full object-cover mb-3 border-4 border-brand-500"
+            />
+            <p className="font-semibold text-gray-900 dark:text-white">Avendano</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Developer</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Hardware & Sensors</p>
+          </div>
+          <div className="flex flex-col items-center text-center">
+            <img
+              src="/images/developers/maigue.jpg"
+              alt="Developer 3"
+              className="w-24 h-24 rounded-full object-cover mb-3 border-4 border-brand-500"
+            />
+            <p className="font-semibold text-gray-900 dark:text-white">Maigue</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Developer</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">System Testing & QA</p>
           </div>
         </div>
       </div>
@@ -104,10 +124,14 @@ export default function AboutPage() {
       {/* Institution */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-6">
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Institution</h3>
-        <div className="flex items-start gap-3">
-          <span className="text-2xl">🏫</span>
+        <div className="flex items-start gap-4">
+          <img
+            src="/images/institution/aclc-logo.jpg"
+            alt="ACLC College"
+            className="w-20 h-20 object-contain"
+          />
           <div>
-            <p className="font-semibold text-gray-900 dark:text-white">Academic Project</p>
+            <p className="font-semibold text-gray-900 dark:text-white">ACLC College</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Developed as part of an academic research project focused on sustainable agriculture and IoT-enabled farming solutions.
             </p>
