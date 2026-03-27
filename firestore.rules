@@ -2,84 +2,150 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Users — auth read/write own document
+    
+    // ===== MOBILE APP RULES =====
+    
+    // Users collection - users can only read/write their own data
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
-
-      // Itineraries — auth read/write own
-      match /itineraries/{docId} {
+      
+      // Itineraries subcollection - users can only access their own itineraries
+      match /itineraries/{itineraryId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
-
-      // Bucket List — auth read/write own
-      match /bucketList/{docId} {
+      
+      // Bucket list subcollection - users can only access their own bucket list items
+      match /bucketList/{itemId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
 
-    // Posts — auth read all, write own
+    // NEW: Travel Posts for Social Feed
+    match /travelPosts/{postId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // Comments subcollection for Travel Posts
+      match /comments/{commentId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+        
+        // NEW: Nested Replies subcollection underneath each Comment
+        match /replies/{replyId} {
+          allow read: if request.auth != null;
+          allow create: if request.auth != null;
+          allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+        }
+      }
+    }
+
+    // NEW: Social Feed Stories
+    match /stories/{storyId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+    
+    // Community posts - authenticated users can read all, write their own
     match /posts/{postId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
-
-    // Comments — auth read all, write own
+    
+    // Comments - authenticated users can read all, write their own
     match /comments/{commentId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
-
-    // Reviews — public read, auth create, write own
+    
+    // Reviews - public read, authenticated users can create, users can update/delete their own
     match /reviews/{reviewId} {
       allow read: if true;
       allow create: if request.auth != null;
       allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
     }
 
-    // Geographic hierarchy — public read, auth write
+    // Byahe (short video feed) - public read, authenticated write
+    match /byahe/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+      
+      // Byahe comments subcollection - public read, authenticated create, own update/delete
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+        allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      }
+    }
+    
+    // ===== CMS ADMIN RULES =====
+    
+    // Island Groups - public read, admin write
     match /islandGroups/{docId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
-
+    
+    // Regions - public read, admin write
     match /regions/{docId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
-
+    
+    // Provinces - public read, admin write
     match /provinces/{docId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
-
+    
+    // Municipalities - public read, admin write
     match /municipalities/{docId} {
       allow read: if true;
       allow write: if request.auth != null;
-
+      
+      // Activities subcollection - public read, admin write
       match /activities/{activityId} {
         allow read: if true;
         allow write: if request.auth != null;
       }
-
+      
+      // Rooms subcollection - public read, admin write
       match /rooms/{roomId} {
         allow read: if true;
         allow write: if request.auth != null;
       }
     }
-
-    // Featured content — public read, auth write
+    
+    // Popular Destinations (legacy) - public read, admin write
     match /popularDestinations/{docId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
-
+    
+    // Featured Attractions (new) - public read, admin write
     match /featuredAttractions/{docId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
+    
+    // Featured Provinces (new) - public read, admin write
+    match /featuredProvinces/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
 
-    // Admin profiles — auth read/write own
+    // Top Experiences (new) - public read, admin write
+    match /topExperiences/{docId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Admin Profiles - only the owner can read/write their own profile
     match /adminProfiles/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }

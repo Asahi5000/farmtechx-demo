@@ -1,5 +1,5 @@
 {
   "projects": {
-    "default": "layaspinas-50cbe"
+    "default": "<your-firebase-project-id>"
   }
 }
