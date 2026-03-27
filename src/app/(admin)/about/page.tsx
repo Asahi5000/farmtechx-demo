@@ -125,11 +125,11 @@ export default function AboutPage() {
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-6">
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4 text-center">Institution</h3>
         <div className="flex flex-col items-center text-center">
-          <div className="w-48 h-48 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-2xl shadow-lg flex items-center justify-center p-6 mb-4 border-2 border-gray-200 dark:border-gray-600">
+          <div className="w-full max-w-md bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-800 rounded-2xl shadow-lg flex items-center justify-center p-8 mb-4 border-2 border-gray-200 dark:border-gray-600">
             <img
               src="/images/institution/aclc-logo.png"
               alt="ACLC College of Daet"
-              className="w-full h-full object-contain"
+              className="w-full h-auto object-contain"
             />
           </div>
           <p className="font-bold text-xl text-gray-900 dark:text-white mb-2">ACLC College of Daet</p>
