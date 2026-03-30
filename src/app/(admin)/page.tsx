@@ -104,10 +104,7 @@ export default function DashboardPage() {
       <div className="bg-gradient-to-r from-brand-500 to-brand-600 rounded-xl p-6 shadow-lg text-white">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold mb-1">Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}!</h1>
-            <p className="text-brand-100 text-sm">
-              Role: <span className="font-semibold">{user?.email?.includes('admin') ? 'Admin' : 'Staff'}</span>
-            </p>
+            <h1 className="text-2xl font-bold">Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}!</h1>
           </div>
           <div className="text-right">
             <p className="text-brand-100 text-sm">Current Date & Time</p>

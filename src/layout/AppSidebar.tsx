@@ -41,11 +41,7 @@ const navItems: NavItem[] = [
     name: "History",
     path: "/history",
   },
-  {
-    icon: <UserCircleIcon />,
-    name: "Users",
-    path: "/users",
-  },
+
   {
     icon: <PageIcon />,
     name: "About",
