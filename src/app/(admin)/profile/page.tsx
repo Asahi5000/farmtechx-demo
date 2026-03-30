@@ -30,12 +30,15 @@ export default function ProfilePage() {
 
     setUploading(true);
     try {
-      const storageRef = ref(storage, `profile-images/${user.uid}`);
-      await uploadBytes(storageRef, file);
-      const photoURL = await getDownloadURL(storageRef);
+      const timestamp = Date.now();
+      const storageRef = ref(storage, `profile-images/${user.uid}_${timestamp}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const photoURL = await getDownloadURL(snapshot.ref);
       await updateProfile(user, { photoURL });
       refreshUser();
       showToast("Profile image updated successfully.", "success");
+      // Reset file input
+      e.target.value = '';
     } catch (error: any) {
       console.error("Error uploading image:", error);
       showToast(error.message || "Failed to upload image.", "error");
@@ -79,36 +82,42 @@ export default function ProfilePage() {
           Profile Image
         </h3>
         <div className="flex items-center gap-6">
-          <div className="relative">
+          <label className={`relative ${uploading ? 'cursor-wait' : 'cursor-pointer'} group`}>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              disabled={uploading}
+              className="hidden"
+            />
             {user?.photoURL ? (
               <img
                 src={user.photoURL}
                 alt="Profile"
-                className="w-24 h-24 rounded-full object-cover border-4 border-brand-500"
+                className={`w-24 h-24 rounded-full object-cover border-4 border-brand-500 transition-opacity ${uploading ? 'opacity-50' : 'group-hover:opacity-75'}`}
               />
             ) : (
-              <div className="w-24 h-24 bg-gradient-to-br from-brand-400 to-brand-600 rounded-full flex items-center justify-center text-white text-3xl font-bold border-4 border-brand-500">
+              <div className={`w-24 h-24 bg-gradient-to-br from-brand-400 to-brand-600 rounded-full flex items-center justify-center text-white text-3xl font-bold border-4 border-brand-500 transition-opacity ${uploading ? 'opacity-50' : 'group-hover:opacity-75'}`}>
                 {user?.displayName?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U"}
               </div>
             )}
-            {uploading && (
-              <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+            {/* Hover/Loading Overlay */}
+            <div className={`absolute inset-0 bg-black/50 rounded-full flex items-center justify-center transition-opacity ${uploading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+              {uploading ? (
                 <span className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
-              </div>
-            )}
-          </div>
+              ) : (
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              )}
+            </div>
+          </label>
           <div>
-            <label className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-600 cursor-pointer disabled:opacity-50">
-              {uploading ? "Uploading..." : "Change Photo"}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                disabled={uploading}
-                className="hidden"
-              />
-            </label>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">JPG, PNG or GIF. Max 5MB.</p>
+            <p className="text-sm font-medium text-gray-800 dark:text-white mb-1">
+              {uploading ? "Uploading image..." : "Click on the image to change"}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">JPG, PNG or GIF. Max 5MB.</p>
           </div>
         </div>
       </div>
@@ -168,12 +177,6 @@ export default function ProfilePage() {
               {user?.metadata?.lastSignInTime
                 ? new Date(user.metadata.lastSignInTime).toLocaleString()
                 : "—"}
-            </p>
-          </div>
-          <div>
-            <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Email Verified</p>
-            <p className="text-sm font-medium text-gray-800 dark:text-white">
-              {user?.emailVerified ? "✅ Yes" : "❌ No"}
             </p>
           </div>
         </div>
