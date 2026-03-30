@@ -1,80 +1,180 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
+import { updateProfile } from "firebase/auth";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "@/config/firebase";
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
+  const { showToast } = useToast();
+  
+  const [displayName, setDisplayName] = useState(user?.displayName || "");
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast("Please upload an image file.", "error");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Image size must be less than 5MB.", "error");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const storageRef = ref(storage, `profile-images/${user.uid}`);
+      await uploadBytes(storageRef, file);
+      const photoURL = await getDownloadURL(storageRef);
+      await updateProfile(user, { photoURL });
+      refreshUser();
+      showToast("Profile image updated successfully.", "success");
+    } catch (error: any) {
+      console.error("Error uploading image:", error);
+      showToast(error.message || "Failed to upload image.", "error");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    
+    if (!displayName.trim()) {
+      showToast("Display name cannot be empty.", "warning");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateProfile(user, { displayName: displayName.trim() });
+      refreshUser();
+      showToast("Profile updated successfully.", "success");
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      showToast(error.message || "Failed to update profile.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Profile</h2>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">View your account information</p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Edit Profile</h2>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">Update your profile information</p>
       </div>
 
-      {/* User Info Card */}
+      {/* Profile Image Upload */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800 lg:p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-brand-400 to-brand-600 rounded-full flex items-center justify-center text-white text-3xl font-bold">
-            {user?.displayName?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U"}
+        <h3 className="mb-5 text-lg font-semibold text-gray-800 dark:text-white">
+          Profile Image
+        </h3>
+        <div className="flex items-center gap-6">
+          <div className="relative">
+            {user?.photoURL ? (
+              <img
+                src={user.photoURL}
+                alt="Profile"
+                className="w-24 h-24 rounded-full object-cover border-4 border-brand-500"
+              />
+            ) : (
+              <div className="w-24 h-24 bg-gradient-to-br from-brand-400 to-brand-600 rounded-full flex items-center justify-center text-white text-3xl font-bold border-4 border-brand-500">
+                {user?.displayName?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U"}
+              </div>
+            )}
+            {uploading && (
+              <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                <span className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
           </div>
           <div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-              {user?.displayName || "User"}
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{user?.email}</p>
-            <span className="inline-block mt-1 px-2 py-1 text-xs font-semibold rounded-full bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
-              {user?.email?.includes('admin') ? 'Admin' : 'Staff'}
-            </span>
+            <label className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-600 cursor-pointer disabled:opacity-50">
+              {uploading ? "Uploading..." : "Change Photo"}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                disabled={uploading}
+                className="hidden"
+              />
+            </label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">JPG, PNG or GIF. Max 5MB.</p>
           </div>
         </div>
+      </div>
 
-        {/* Account Details */}
-        <div className="p-5 border border-gray-200 rounded-2xl dark:border-gray-700 lg:p-6">
-          <h4 className="mb-5 text-lg font-medium text-gray-800 dark:text-white">
-            Account Details
-          </h4>
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <div>
-              <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Email Address</p>
-              <p className="text-sm font-medium text-gray-800 dark:text-white">
-                {user?.email || "—"}
-              </p>
-            </div>
-            <div>
-              <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Account UID</p>
-              <p className="text-sm font-mono text-gray-800 dark:text-white break-all">
-                {user?.uid || "—"}
-              </p>
-            </div>
-            <div>
-              <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Display Name</p>
-              <p className="text-sm font-medium text-gray-800 dark:text-white">
-                {user?.displayName || "Not set"}
-              </p>
-            </div>
-            <div>
-              <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Account Created</p>
-              <p className="text-sm font-medium text-gray-800 dark:text-white">
-                {user?.metadata?.creationTime
-                  ? new Date(user.metadata.creationTime).toLocaleString()
-                  : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Last Sign In</p>
-              <p className="text-sm font-medium text-gray-800 dark:text-white">
-                {user?.metadata?.lastSignInTime
-                  ? new Date(user.metadata.lastSignInTime).toLocaleString()
-                  : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Email Verified</p>
-              <p className="text-sm font-medium text-gray-800 dark:text-white">
-                {user?.emailVerified ? "✅ Yes" : "❌ No"}
-              </p>
-            </div>
+      {/* Edit Profile Form */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800 lg:p-6">
+        <h3 className="mb-5 text-lg font-semibold text-gray-800 dark:text-white">
+          Profile Information
+        </h3>
+        <form onSubmit={handleSaveProfile} className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
+              Display Name
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-brand-800 lg:max-w-md"
+              placeholder="Enter your name"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+          >
+            {saving && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+            {saving ? "Saving..." : "Save Profile"}
+          </button>
+        </form>
+      </div>
+
+      {/* Account Details (Read-only) */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-800 lg:p-6">
+        <h3 className="mb-5 text-lg font-semibold text-gray-800 dark:text-white">
+          Account Details
+        </h3>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <div>
+            <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Account UID</p>
+            <p className="text-sm font-mono text-gray-800 dark:text-white break-all">
+              {user?.uid || "—"}
+            </p>
+          </div>
+          <div>
+            <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Account Created</p>
+            <p className="text-sm font-medium text-gray-800 dark:text-white">
+              {user?.metadata?.creationTime
+                ? new Date(user.metadata.creationTime).toLocaleString()
+                : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Last Sign In</p>
+            <p className="text-sm font-medium text-gray-800 dark:text-white">
+              {user?.metadata?.lastSignInTime
+                ? new Date(user.metadata.lastSignInTime).toLocaleString()
+                : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Email Verified</p>
+            <p className="text-sm font-medium text-gray-800 dark:text-white">
+              {user?.emailVerified ? "✅ Yes" : "❌ No"}
+            </p>
           </div>
         </div>
       </div>
