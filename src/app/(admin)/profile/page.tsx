@@ -13,6 +13,7 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [imageKey, setImageKey] = useState(Date.now());
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -37,7 +38,8 @@ export default function ProfilePage() {
       // Add cache-busting parameter
       const photoURLWithCache = `${photoURL}?t=${timestamp}`;
       await updateProfile(user, { photoURL: photoURLWithCache });
-      refreshUser();
+      await refreshUser();
+      setImageKey(timestamp); // Force image re-render
       showToast("Profile image updated successfully.", "success");
       // Reset file input
       e.target.value = '';
@@ -94,6 +96,7 @@ export default function ProfilePage() {
             />
             {user?.photoURL ? (
               <img
+                key={imageKey}
                 src={user.photoURL}
                 alt="Profile"
                 className={`w-24 h-24 rounded-full object-cover border-4 border-brand-500 transition-opacity ${uploading ? 'opacity-50' : 'group-hover:opacity-75'}`}
