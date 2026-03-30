@@ -10,6 +10,14 @@ const outfit = Outfit({
   subsets: ["latin"],
 });
 
+export const metadata = {
+  title: 'FarmTechXBaluzo - Hydroponic Farm Management',
+  description: 'Real-time hydroponic farm monitoring and control system',
+  icons: {
+    icon: '/images/baluzo-favicon.ico',
+  },
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
