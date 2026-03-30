@@ -5,8 +5,8 @@ import Link from "next/link";
 import React from "react";
 
 export const metadata: Metadata = {
-  title: "LayasPinas Admin Error 404 | LayasPinas Admin - LayasPinas Admin LayasPinas CMS",
-  description: "LayasPinas Content Management System",
+  title: "FarmTechXBaluzo - Page Not Found",
+  description: "FarmTechXBaluzo Hydroponic Farm Management System",
 };
 
 export default function Error404() {
@@ -46,7 +46,7 @@ export default function Error404() {
       </div>
       {/* <!-- Footer --> */}
       <p className="absolute text-sm text-center text-gray-500 -translate-x-1/2 bottom-6 left-1/2 dark:text-gray-400">
-        &copy; {new Date().getFullYear()} - LayasPinas Admin
+        &copy; {new Date().getFullYear()} - FarmTechXBaluzo
       </p>
     </div>
   );
