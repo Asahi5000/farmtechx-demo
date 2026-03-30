@@ -34,7 +34,9 @@ export default function ProfilePage() {
       const storageRef = ref(storage, `profile-images/${user.uid}_${timestamp}`);
       const snapshot = await uploadBytes(storageRef, file);
       const photoURL = await getDownloadURL(snapshot.ref);
-      await updateProfile(user, { photoURL });
+      // Add cache-busting parameter
+      const photoURLWithCache = `${photoURL}?t=${timestamp}`;
+      await updateProfile(user, { photoURL: photoURLWithCache });
       refreshUser();
       showToast("Profile image updated successfully.", "success");
       // Reset file input
