@@ -32,16 +32,20 @@ const navItems: NavItem[] = [
     path: "/",
   },
   {
+    icon: <PieChartIcon />,
+    name: "Device Status",
+    path: "/device-status",
+  },
+  {
     icon: <BoxCubeIcon />,
-    name: "Irrigation",
-    path: "/irrigation",
+    name: "Pumps",
+    path: "/pumps",
   },
   {
     icon: <CalenderIcon />,
     name: "History",
     path: "/history",
   },
-
   {
     icon: <PageIcon />,
     name: "About",

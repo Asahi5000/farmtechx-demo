@@ -1,6 +1,6 @@
-import { ref, onValue, set, push, remove, off, DatabaseReference } from 'firebase/database';
+import { ref, onValue, set, push, remove, off } from 'firebase/database';
 import { db } from './firebase';
-import type { PumpState, WaterSchedule } from '@/types';
+import type { PumpState, WaterSchedule, SolenoidValve, ZoneSchedule } from '@/types';
 
 export const PATHS = {
   WATER_SENSORS: 'farmtechx/sensors/water',
@@ -10,6 +10,10 @@ export const PATHS = {
   PUMP_CONTROL: 'farmtechx/pumpControl',
   DOSING_PUMPS: 'farmtechx/dosingPumps',
   SCHEDULES: 'farmtechx/waterSchedules',
+  SOLENOID_VALVES: 'farmtechx/solenoidValves',
+  ZONE_SCHEDULES: 'farmtechx/zoneSchedules',
+  LOG_WATER: 'farmtechx/logs/waterDevice',
+  LOG_SOIL: 'farmtechx/logs/soilDevice',
 };
 
 export function listenTo<T>(path: string, callback: (data: T | null) => void): () => void {
@@ -34,9 +38,17 @@ export function listenToLatestWaterReadings(
   return () => off(r);
 }
 
-export async function setPumpState(pump: 'main' | 'A' | 'B' | 'C', state: PumpState): Promise<void> {
+export async function setPumpState(pump: 'main' | 'A' | 'B' | 'C' | 'D', state: PumpState): Promise<void> {
   const path = pump === 'main' ? PATHS.PUMP_CONTROL : `${PATHS.DOSING_PUMPS}/${pump}`;
   await set(ref(db, path), state);
+}
+
+export async function setValveState(zone: 'zone1' | 'zone2' | 'zone3' | 'zone4', valve: SolenoidValve): Promise<void> {
+  await set(ref(db, `${PATHS.SOLENOID_VALVES}/${zone}`), valve);
+}
+
+export async function setZoneSchedule(zone: 'zone1' | 'zone2' | 'zone3' | 'zone4', schedule: ZoneSchedule): Promise<void> {
+  await set(ref(db, `${PATHS.ZONE_SCHEDULES}/${zone}`), schedule);
 }
 
 export async function addSchedule(schedule: Omit<WaterSchedule, 'lastExecuted'>): Promise<void> {

@@ -36,6 +36,27 @@ export interface DosingPumps {
   A: PumpState;
   B: PumpState;
   C: PumpState;
+  D: PumpState;
+}
+
+export interface SolenoidValve {
+  state: 'OPEN' | 'CLOSED';
+  mode: 'AUTO' | 'MANUAL';
+}
+
+export interface SolenoidValves {
+  zone1: SolenoidValve;
+  zone2: SolenoidValve;
+  zone3: SolenoidValve;
+  zone4: SolenoidValve;
+}
+
+export interface ZoneSchedule {
+  hour: number;
+  minute: number;
+  ampm: 'AM' | 'PM';
+  duration: number; // minutes
+  enabled: boolean;
 }
 
 export interface WaterSchedule {
@@ -43,6 +64,10 @@ export interface WaterSchedule {
   minute: number;
   ampm: 'AM' | 'PM';
   duration: number;
+  durationSec?: number;
+  targetPH?: number;
+  targetEC?: number;
+  zones?: number[];
   lastExecuted?: number;
 }
 

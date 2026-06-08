@@ -3,16 +3,18 @@ import Checkbox from "@/components/form/input/Checkbox";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
-import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
-import Link from "next/link";
+import { EyeCloseIcon, EyeIcon } from "@/icons";
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useRouter } from "next/navigation";
+import { setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
+import { auth } from "@/config/firebase";
+import Image from "next/image";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
-  const [isChecked, setIsChecked] = useState(false);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,9 @@ export default function SignInForm() {
     setLoading(true);
 
     try {
+      // Set persistence based on "Keep me logged in" checkbox
+      await setPersistence(auth, keepLoggedIn ? browserLocalPersistence : browserSessionPersistence);
+      
       await signIn(email, password);
       showToast("Successfully signed in!", "success");
       router.push("/");
@@ -54,7 +59,22 @@ export default function SignInForm() {
       </div>
       <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
         <div>
-          <div className="mb-5 sm:mb-8">
+          {/* Logo */}
+          <div className="flex justify-center items-center gap-6 mb-8">
+            <img
+              src="/images/baluzo-farm-logo-nobg.png"
+              alt="Baluzo Farm"
+              className="w-40 h-auto"
+            />
+            <span className="text-3xl text-gray-400 dark:text-gray-600">×</span>
+            <img
+              src="/images/farmtechx-logo-nobg.png"
+              alt="FarmTechX"
+              className="w-40 h-auto"
+            />
+          </div>
+          
+          <div className="mb-5 sm:mb-8 text-center">
             <h1 className="mb-2 font-semibold text-gray-800 text-title-sm dark:text-white/90 sm:text-title-md">
               Admin Sign In
             </h1>
@@ -67,23 +87,27 @@ export default function SignInForm() {
               <div className="space-y-6">
                 <div>
                   <Label>
-                    Email <span className="text-error-500">*</span>{" "}
+                    Email <span className="text-error-500">*</span>
                   </Label>
                   <Input 
-                    placeholder="info@gmail.com" 
+                    placeholder="admin@farmtech.com" 
                     type="email" 
-                    onChange={(e) => setEmail(e.target.value)} 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
                   />
                 </div>
                 <div>
                   <Label>
-                    Password <span className="text-error-500">*</span>{" "}
+                    Password <span className="text-error-500">*</span>
                   </Label>
                   <div className="relative">
                     <Input
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
+                      value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      required
                     />
                     <span
                       onClick={() => setShowPassword(!showPassword)}
@@ -97,19 +121,11 @@ export default function SignInForm() {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Checkbox checked={isChecked} onChange={setIsChecked} />
-                    <span className="block font-normal text-gray-700 text-theme-sm dark:text-gray-400">
-                      Keep me logged in
-                    </span>
-                  </div>
-                  <Link
-                    href="/reset-password"
-                    className="text-sm text-brand-500 hover:text-brand-600 dark:text-brand-400"
-                  >
-                    Forgot password?
-                  </Link>
+                <div className="flex items-center gap-3">
+                  <Checkbox checked={keepLoggedIn} onChange={setKeepLoggedIn} />
+                  <span className="block font-normal text-gray-700 text-theme-sm dark:text-gray-400">
+                    Keep me logged in
+                  </span>
                 </div>
                 <div>
                   <Button className="w-full" size="sm" disabled={loading}>
@@ -118,7 +134,6 @@ export default function SignInForm() {
                 </div>
               </div>
             </form>
-
           </div>
         </div>
       </div>

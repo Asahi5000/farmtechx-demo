@@ -1,0 +1,46 @@
+Schedule triggers (e.g. 8:00 AM)
+        ↓
+1. CHECK WATER LEVEL
+   → LOW = open refilling valve
+   → Wait until HIGH
+        ↓
+2. DOSING PHASE (loop)
+   → Dose for 6 seconds
+   → Wait (mixing time)
+   → Read pH sensor
+   → Read EC sensor
+   → Hindi pa naabot targetPH/targetEC?
+   → Dose ulit for 6 seconds
+   → Ulitin hanggang ma-reach ang target values
+        ↓
+3. MAIN WATER PUMP ON
+   → Run for set duration (min + sec)
+        ↓
+4. OPEN selected zones (1, 2, 3)
+        ↓
+5. DONE
+
+
+----------------------------------------
+1. CHECK WATER LEVEL muna
+   → Kung LOW = open refilling solenoid valve
+   → Hintayin maging HIGH bago mag-proceed
+
+2. DOSING PHASE — target pH at EC dito ginagamit!
+   → Read current pH from sensor
+   → Kung pH < targetPH → ON ang Dosing A (pH UP)
+   → Kung pH > targetPH → ON ang Dosing B (pH DOWN)
+   → Ulitin hanggang ma-reach ang targetPH
+   
+   → Read current EC from sensor  
+   → Kung EC < targetEC → ON ang Dosing C (EC UP)
+   → Kung EC > targetEC → ON ang Dosing D (EC DOWN)
+   → Ulitin hanggang ma-reach ang targetEC
+
+3. MAIN WATER PUMP ON
+   → Run for duration (e.g. 5 min 0 sec)
+   
+4. OPEN selected solenoid zones (1, 2, 3)
+   → Para mag-dilig
+
+5. DONE — close lahat
