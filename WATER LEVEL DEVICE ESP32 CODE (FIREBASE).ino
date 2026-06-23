@@ -727,6 +727,8 @@ void processPumpState() {
         Serial.printf("✅ Automation completely finished: %s\n", activeScheduleKey);
       }
       break;
+  }
+}
 
 // ================= BACKGROUND TASK (CORE 0) =================
 void backgroundSensorTask(void *pvParameters) {
