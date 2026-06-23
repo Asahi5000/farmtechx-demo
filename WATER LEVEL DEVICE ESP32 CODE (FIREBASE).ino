@@ -1,26 +1,12 @@
 // ============================================================
-//  FarmTechX — WATER LEVEL / CONTROL DEVICE
-//  Updated for Firebase Realtime Database (REST API)
-//  Changes from original:
-//    • All HTTP calls → Firebase RTDB REST over HTTPS
-//    • Hardcoded WiFi → WiFiManager (captive-portal provisioning)
-//    • NTP time already existed; kept + strengthened retry
-//    • Schedule key-based execution (RTDB push keys, not int IDs)
-//    • Reads soilData/latest & rainData/latest from RTDB
-//    • Writes pumpControl, dosingPumps, waterSchedules/{key}/lastExecuted
-//    • All sensor / relay / state-machine logic UNCHANGED
+//  FarmTechX — WATER LEVEL & DOSING CONTROL DEVICE
+//  Using Firebase Realtime Database (REST API)
 // ============================================================
-
-// ─── LIBRARY REQUIREMENTS (install via Arduino Library Manager) ───
-// • WiFiManager  by tzapu  (search "WiFiManager")
-// • ArduinoJson  v7        (search "ArduinoJson")
-// • DallasTemperature + OneWire
-// • WiFiClientSecure  (bundled with ESP32 Arduino core)
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include <WiFiManager.h>          // ← replaces hardcoded credentials
+#include <WiFiManager.h>          
 #include <ArduinoJson.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -36,13 +22,15 @@
 #define RELAY_A      13
 #define RELAY_B      12
 #define RELAY_C      14
+#define RELAY_D      19
+#define SOLENOID_REFILL 25
+#define ZONE_1          27
+#define ZONE_2          23
+#define ZONE_3          22
 #define LEVEL_HIGH   32
 #define LEVEL_LOW    33
 
 // ================= FIREBASE CONFIG =================
-// Replace with your actual project values from the Firebase console
-// databaseURL → Realtime Database → Data tab → URL at the top
-// RTDB_SECRET → Project Settings → Service Accounts → Database secrets
 #define RTDB_HOST   "farmtechx-3accc-default-rtdb.asia-southeast1.firebasedatabase.app"
 #define RTDB_SECRET "9RFNs6PmAThgHXohje0RrR5i6EMEvwjhaR6BHhOs"
 
@@ -54,6 +42,7 @@
 #define PATH_PUMP_CONTROL   "/farmtechx/pumpControl"
 #define PATH_DOSING_PUMPS   "/farmtechx/dosingPumps"
 #define PATH_SCHEDULES      "/farmtechx/waterSchedules"
+#define PATH_SOLENOID_VALVES "/farmtechx/solenoidValves"
 #define PATH_LOG_WATER      "/farmtechx/logs/waterDevice"
 
 // ================= NTP CONFIG =================
@@ -73,8 +62,8 @@ const float PH_OFFSET =  30.96f;
 float tdsCalibration  =   1.138f;
 
 // ================= DOSING TIMINGS =================
-const unsigned long DOSING_TIME               = 6000UL;  // 6 s
-const unsigned long DELAY_BETWEEN_PUMPS_MINUTES = 4UL;   // 4 min
+const unsigned long DOSING_TIME = 6000UL;  // Dosing run time in ms (6 seconds)
+const float SENSOR_STABILIZATION_DELAY_MIN = 4.5f; // Wait time in minutes bago mag test ulit
 
 // ================= DS18B20 =================
 OneWire oneWire(ONE_WIRE_BUS);
@@ -87,10 +76,9 @@ bool  waterHigh = false, waterLow = false;
 // ================= PUMP STATE MACHINE =================
 enum PumpState {
   IDLE,
-  DOSING_C, WAIT_C, CHECK_PH_C,
-  DOSING_B, WAIT_B,
-  DOSING_A, WAIT_A,
-  WATER_PUMP, WATER_DELAY
+  CHECK_PH, DOSING_PH_UP, DOSING_PH_DOWN, WAIT_PH,
+  CHECK_EC, DOSING_EC_UP, DOSING_EC_DOWN, WAIT_EC,
+  OPEN_ZONES, WATER_PUMP, WATER_DELAY, WAIT_END
 };
 PumpState currentState  = IDLE;
 unsigned long stateStartTime = 0;
@@ -100,6 +88,12 @@ bool executedFlag       = false;
 // Stores the RTDB push key of the running schedule (e.g. "-NxABC123")
 char activeScheduleKey[40] = "";
 int  activeScheduleDuration = 0;     // minutes
+int  activeScheduleDurationSec = 0;  // seconds
+float activeTargetPH = 0.0f;
+float activeTargetEC = 0.0f;
+bool activeZone1 = false;
+bool activeZone2 = false;
+bool activeZone3 = false;
 
 // Prevent re-firing the same schedule key within the same minute
 char lastExecutedKey[40] = "";
@@ -108,18 +102,22 @@ char lastExecutedKey[40] = "";
 bool manualOverrideA     = false;
 bool manualOverrideB     = false;
 bool manualOverrideC     = false;
+bool manualOverrideD     = false;
 bool manualOverrideWater = false;
+bool manualOverrideZone1 = false;
+bool manualOverrideZone2 = false;
+bool manualOverrideZone3 = false;
+
+// Refilling Automation Tracker
+bool isRefilling = false;
+unsigned long lastLoopTime = 0;
 
 // ================= INTERVAL TRACKERS =================
 unsigned long lastSensorRead   = 0;
 unsigned long lastScheduleCheck = 0;
 unsigned long lastPumpPoll     = 0;
 
-// ─────────────────────────────────────────────────────────────
-//  HTTPS helper — performs one request and returns body string
-//  method: "GET" | "PUT" | "POST" | "PATCH"
-//  Returns "" on failure; fills httpCode_out if non-null
-// ─────────────────────────────────────────────────────────────
+// ================= FIREBASE HTTPS REQUEST =================
 String rtdbRequest(const char* method, const char* path,
                    const String& body = "",
                    int* httpCode_out = nullptr) {
@@ -154,9 +152,7 @@ String rtdbRequest(const char* method, const char* path,
   return response;
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Logging helper — POST a timestamped message to Firebase
-// ─────────────────────────────────────────────────────────────
+// ================= LOGGING TO FIREBASE =================
 void sendLog(const String& message) {
   static unsigned long lastLogTime = 0;
   if (millis() - lastLogTime < 3000) return; // rate limit: max 1 log per 3 seconds
@@ -176,12 +172,7 @@ void sendLog(const String& message) {
   rtdbRequest("POST", PATH_LOG_WATER, body);
 }
 
-// ─────────────────────────────────────────────────────────────
-//  WiFi + WiFiManager setup
-//  On first boot (or after portal reset) opens AP "FarmTechX-WaterDevice"
-//  Connect your phone to that AP → browser opens automatically →
-//  enter SSID + password → credentials saved to flash.
-// ─────────────────────────────────────────────────────────────
+// ================= WIFI SETUP =================
 void setupWiFi() {
   WiFiManager wm;
   wm.setConfigPortalTimeout(180);   // give up portal after 3 min if no one connects
@@ -199,9 +190,7 @@ void setupWiFi() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  NTP time sync
-// ─────────────────────────────────────────────────────────────
+// ================= TIME SYNC =================
 void setupTime() {
   configTime(TZ_OFFSET_SEC, 0, NTP_SERVER1, NTP_SERVER2);
   struct tm timeinfo;
@@ -220,9 +209,7 @@ void setupTime() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Water level probes
-// ─────────────────────────────────────────────────────────────
+// ================= WATER LEVEL =================
 void setupWaterLevelPins() {
   pinMode(LEVEL_HIGH, INPUT);
   pinMode(LEVEL_LOW,  INPUT);
@@ -260,17 +247,13 @@ void readAndSendWaterLevel() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Relay helpers (LOW = ON for active-low relay board)
-// ─────────────────────────────────────────────────────────────
-void startDosing(char p) { digitalWrite(p=='A'?RELAY_A:p=='B'?RELAY_B:RELAY_C, LOW); }
-void stopDosing(char p)  { digitalWrite(p=='A'?RELAY_A:p=='B'?RELAY_B:RELAY_C, HIGH); }
+// ================= RELAY HELPERS =================
+void startDosing(char p) { digitalWrite(p=='A'?RELAY_A:p=='B'?RELAY_B:p=='C'?RELAY_C:RELAY_D, LOW); }
+void stopDosing(char p)  { digitalWrite(p=='A'?RELAY_A:p=='B'?RELAY_B:p=='C'?RELAY_C:RELAY_D, HIGH); }
 void startWaterPump()    { digitalWrite(PUMP_SSR, LOW); }
 void stopWaterPump()     { digitalWrite(PUMP_SSR, HIGH); }
 
-// ─────────────────────────────────────────────────────────────
-//  Read water-quality sensors and POST to RTDB (push)
-// ─────────────────────────────────────────────────────────────
+// ================= POST SENSOR DATA =================
 void readAndSendSensors() {
   // — DS18B20 temperature —
   DS18B20.requestTemperatures();
@@ -321,10 +304,7 @@ void readAndSendSensors() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Read soil moisture + rain from RTDB (written by Soil ESP32)
-//  Returns false if either condition blocks irrigation
-// ─────────────────────────────────────────────────────────────
+// ================= CHECK SOIL/RAIN =================
 bool checkSoilRain() {
   if (WiFi.status() != WL_CONNECTED) return false;
 
@@ -358,9 +338,7 @@ bool checkSoilRain() {
   return true;
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Mark a schedule as executed by writing lastExecuted timestamp
-// ─────────────────────────────────────────────────────────────
+// ================= SAVE SCHEDULE TIMESTAMPS =================
 void markScheduleExecuted(const char* key) {
   if (!key || strlen(key) == 0) return;
   Serial.printf("📌 Marking schedule executed: %s\n", key);
@@ -387,13 +365,31 @@ void markScheduleExecuted(const char* key) {
   if (!success) Serial.println("⚠️ Could not stamp lastExecuted after 30 s");
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Poll pumpControl + dosingPumps from RTDB (manual dashboard control)
-//  Mirrors web state to relays in real time, and handles countdown timers
-// ─────────────────────────────────────────────────────────────
+// ================= DASHBOARD MANUAL SYNC =================
 void checkManualFromRTDB() {
   if (WiFi.status() != WL_CONNECTED) return;
   uint64_t nowMs = (uint64_t)time(nullptr) * 1000ULL;
+
+  // — solenoid valves —
+  String svRaw = rtdbRequest("GET", PATH_SOLENOID_VALVES);
+  if (svRaw.length() > 2) {
+    JsonDocument doc;
+    if (!deserializeJson(doc, svRaw)) {
+      auto handleValve = [&](const char* key, int pin, bool* overrideFlag) {
+        if (doc.containsKey(key)) {
+          bool isOpen = (strcmp(doc[key]["state"] | "CLOSED", "OPEN") == 0);
+          if (isOpen != *overrideFlag) {
+            *overrideFlag = isOpen;
+            digitalWrite(pin, isOpen ? LOW : HIGH);
+            Serial.printf("🌐 Solenoid %s %s\n", key, isOpen ? "OPEN" : "CLOSED");
+          }
+        }
+      };
+      handleValve("zone1", ZONE_1, &manualOverrideZone1);
+      handleValve("zone2", ZONE_2, &manualOverrideZone2);
+      handleValve("zone3", ZONE_3, &manualOverrideZone3);
+    }
+  }
 
   // — dosing pumps A / B / C / D —
   String dpRaw = rtdbRequest("GET", PATH_DOSING_PUMPS);
@@ -433,7 +429,7 @@ void checkManualFromRTDB() {
       handleDosing("A", 'A', &manualOverrideA);
       handleDosing("B", 'B', &manualOverrideB);
       handleDosing("C", 'C', &manualOverrideC);
-      handleDosing("D", 'D', nullptr); // Virtual D
+      handleDosing("D", 'D', &manualOverrideD);
     }
   }
 
@@ -467,9 +463,7 @@ void checkManualFromRTDB() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Poll waterSchedules from RTDB and check against current time
-// ─────────────────────────────────────────────────────────────
+// ================= CHECK FIREBASE SCHEDULE =================
 void checkWaterSchedules() {
   if (WiFi.status() != WL_CONNECTED) return;
   struct tm t;
@@ -499,6 +493,17 @@ void checkWaterSchedules() {
 
     int schedMin  = hour * 60 + minute;
     int duration  = s["duration"] | 5;
+    int durationSec = s["durationSec"] | 0;
+    float targetPH  = s["targetPH"] | 0.0f;
+    float targetEC  = s["targetEC"] | 0.0f;
+
+    bool hasZone1 = false, hasZone2 = false, hasZone3 = false;
+    JsonArray zArray = s["zones"];
+    for (JsonVariant v : zArray) {
+      if (v == "zone1" || v == 1) hasZone1 = true;
+      if (v == "zone2" || v == 2) hasZone2 = true;
+      if (v == "zone3" || v == 3) hasZone3 = true;
+    }
 
     bool alreadyDone = (strcmp(key, lastExecutedKey) == 0);
 
@@ -515,28 +520,82 @@ void checkWaterSchedules() {
 
       strlcpy(activeScheduleKey, key, sizeof(activeScheduleKey));
       activeScheduleDuration = duration;
+      activeScheduleDurationSec = durationSec;
+      activeTargetPH = targetPH;
+      activeTargetEC = targetEC;
+      activeZone1 = hasZone1;
+      activeZone2 = hasZone2;
+      activeZone3 = hasZone3;
+
       schedulePending = true;
       executedFlag    = false;
-      currentState    = DOSING_C;
+      currentState    = CHECK_PH;
       stateStartTime  = millis();
       sendLog("Automation schedule fired: " + String(key));
-      Serial.printf("🚀 Automation started for schedule key: %s (%d min)\n",
-                    key, duration);
+      Serial.printf("🚀 Automation started for schedule key: %s (%d min %d sec)\n",
+                    key, duration, durationSec);
       break;
     }
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Pump state machine — UNCHANGED logic, just uses key now
-// ─────────────────────────────────────────────────────────────
+// ================= REFILLING LOGIC =================
+void manageRefill() {
+  unsigned long now = millis();
+  unsigned long dt = (lastLoopTime == 0) ? 0 : (now - lastLoopTime);
+  lastLoopTime = now;
+
+  bool wasRefilling = isRefilling;
+  
+  if (waterLow && !isRefilling && !waterHigh) {
+    isRefilling = true;
+    digitalWrite(SOLENOID_REFILL, LOW);
+    sendLog("Tank LOW: Refilling started. Automation paused.");
+    
+    // Safety stop: force off relays so they don't run dry
+    if (!manualOverrideWater) stopWaterPump();
+    if (!manualOverrideA) stopDosing('A');
+    if (!manualOverrideB) stopDosing('B');
+    if (!manualOverrideC) stopDosing('C');
+    if (!manualOverrideD) stopDosing('D');
+    if (!manualOverrideZone1) digitalWrite(ZONE_1, HIGH);
+    if (!manualOverrideZone2) digitalWrite(ZONE_2, HIGH);
+    if (!manualOverrideZone3) digitalWrite(ZONE_3, HIGH);
+  } else if (waterHigh && isRefilling) {
+    isRefilling = false;
+    digitalWrite(SOLENOID_REFILL, HIGH);
+    sendLog("Tank HIGH: Refilling done. Automation resumed.");
+
+    // Resume operations if we were in the middle of a schedule
+    if (schedulePending) {
+      if      (currentState == DOSING_PH_UP && !manualOverrideA) startDosing('A');
+      else if (currentState == DOSING_PH_DOWN && !manualOverrideB) startDosing('B');
+      else if (currentState == DOSING_EC_UP && !manualOverrideC) startDosing('C');
+      else if (currentState == DOSING_EC_DOWN && !manualOverrideD) startDosing('D');
+      else if (currentState == WATER_PUMP || currentState == WATER_DELAY) {
+        if (!manualOverrideWater) startWaterPump();
+        if (activeZone1 && !manualOverrideZone1) digitalWrite(ZONE_1, LOW);
+        if (activeZone2 && !manualOverrideZone2) digitalWrite(ZONE_2, LOW);
+        if (activeZone3 && !manualOverrideZone3) digitalWrite(ZONE_3, LOW);
+      }
+    }
+  }
+
+  // Timer Freeze: if refilling and a schedule is active, push the start time forward by dt
+  if (isRefilling && schedulePending) {
+    stateStartTime += dt;
+  }
+}
+
+// ================= MAIN AUTOMATION LOOP =================
 void processPumpState() {
   if (!schedulePending) return;
 
   // Mid-run soil/rain check
   if (!checkSoilRain()) {
     Serial.println("⚠️ Automation suspended mid-run (moisture/rain)");
-    stopDosing('A'); stopDosing('B'); stopDosing('C'); stopWaterPump();
+    stopDosing('A'); stopDosing('B'); stopDosing('C'); stopDosing('D'); stopWaterPump();
+    digitalWrite(ZONE_1, HIGH); digitalWrite(ZONE_2, HIGH); digitalWrite(ZONE_3, HIGH);
     schedulePending = false;
     currentState    = IDLE;
     markScheduleExecuted(activeScheduleKey);
@@ -546,110 +605,140 @@ void processPumpState() {
   unsigned long now = millis();
 
   switch (currentState) {
-    case DOSING_C:
-      if (!manualOverrideC) startDosing('C');
-      if (now - stateStartTime >= DOSING_TIME) {
-        if (!manualOverrideC) stopDosing('C');
-        sendLog("Dosing pump C started");
+    case CHECK_PH:
+      readAndSendSensors(); // Force explicit read for fresh data
+      if (activeTargetPH <= 0.01f) {
+        currentState = CHECK_EC;
+      } else if (phValue < (activeTargetPH - 0.5f)) {
+        currentState = DOSING_PH_UP;
         stateStartTime = now;
-        currentState   = WAIT_C;
-        Serial.printf("⏳ DOSING C done, waiting %lu min\n",
-                      DELAY_BETWEEN_PUMPS_MINUTES);
-      }
-      break;
-
-    case WAIT_C:
-      if (now - stateStartTime >= DELAY_BETWEEN_PUMPS_MINUTES * 60000UL) {
-        currentState   = CHECK_PH_C;
-        stateStartTime = now;
-        Serial.println("🔬 Checking pH after DOSING C");
-      }
-      break;
-
-    case CHECK_PH_C:
-      if (phValue > 6.5f) {
-        Serial.println("⚠️ pH > 6.5, repeating DOSING C");
-        currentState   = DOSING_C;
+      } else if (phValue > (activeTargetPH + 0.5f)) {
+        currentState = DOSING_PH_DOWN;
         stateStartTime = now;
       } else {
-        Serial.println("✅ pH ≤ 6.5, proceeding to DOSING B");
-        currentState   = DOSING_B;
-        stateStartTime = now;
+        Serial.println("✅ pH is perfectly balanced");
+        currentState = CHECK_EC;
       }
       break;
 
-    case DOSING_B:
-      if (!manualOverrideB) startDosing('B');
-      if (now - stateStartTime >= DOSING_TIME) {
-        if (!manualOverrideB) stopDosing('B');
-        sendLog("Dosing pump B started");
-        stateStartTime = now;
-        currentState   = WAIT_B;
-        Serial.printf("⏳ DOSING B done, waiting %lu min\n",
-                      DELAY_BETWEEN_PUMPS_MINUTES);
-      }
-      break;
-
-    case WAIT_B:
-      if (now - stateStartTime >= DELAY_BETWEEN_PUMPS_MINUTES * 60000UL) {
-        currentState   = DOSING_A;
-        stateStartTime = now;
-        Serial.println("💧 Starting DOSING A");
-      }
-      break;
-
-    case DOSING_A:
+    case DOSING_PH_UP:
       if (!manualOverrideA) startDosing('A');
       if (now - stateStartTime >= DOSING_TIME) {
         if (!manualOverrideA) stopDosing('A');
-        sendLog("Dosing pump A started");
+        sendLog("Dosed pH UP");
+        currentState = WAIT_PH;
         stateStartTime = now;
-        currentState   = WAIT_A;
-        Serial.printf("⏳ DOSING A done, waiting %lu min\n",
-                      DELAY_BETWEEN_PUMPS_MINUTES);
       }
       break;
 
-    case WAIT_A:
-      if (now - stateStartTime >= DELAY_BETWEEN_PUMPS_MINUTES * 60000UL) {
-        currentState   = WATER_PUMP;
+    case DOSING_PH_DOWN:
+      if (!manualOverrideB) startDosing('B');
+      if (now - stateStartTime >= DOSING_TIME) {
+        if (!manualOverrideB) stopDosing('B');
+        sendLog("Dosed pH DOWN");
+        currentState = WAIT_PH;
         stateStartTime = now;
-        Serial.printf("💦 Starting WATER PUMP for %d min\n",
-                      activeScheduleDuration);
       }
+      break;
+
+    case WAIT_PH:
+      if (now - stateStartTime >= SENSOR_STABILIZATION_DELAY_MIN * 60000UL) {
+        currentState = CHECK_PH;
+      }
+      break;
+
+    case CHECK_EC:
+      readAndSendSensors(); // Force explicit read for fresh data
+      if (activeTargetEC <= 0.01f) {
+        currentState = OPEN_ZONES;
+      } else if (ecValue < (activeTargetEC - 0.5f)) {
+        currentState = DOSING_EC_UP;
+        stateStartTime = now;
+      } else if (ecValue > (activeTargetEC + 0.5f)) {
+        currentState = DOSING_EC_DOWN;
+        stateStartTime = now;
+      } else {
+        Serial.println("✅ EC is perfectly balanced");
+        currentState = OPEN_ZONES;
+      }
+      break;
+
+    case DOSING_EC_UP:
+      if (!manualOverrideC) startDosing('C');
+      if (now - stateStartTime >= DOSING_TIME) {
+        if (!manualOverrideC) stopDosing('C');
+        sendLog("Dosed EC UP");
+        currentState = WAIT_EC;
+        stateStartTime = now;
+      }
+      break;
+
+    case DOSING_EC_DOWN:
+      if (!manualOverrideD) startDosing('D');
+      if (now - stateStartTime >= DOSING_TIME) {
+        if (!manualOverrideD) stopDosing('D');
+        sendLog("Dosed EC DOWN");
+        currentState = WAIT_EC;
+        stateStartTime = now;
+      }
+      break;
+
+    case WAIT_EC:
+      if (now - stateStartTime >= SENSOR_STABILIZATION_DELAY_MIN * 60000UL) {
+        currentState = CHECK_EC;
+      }
+      break;
+
+    case OPEN_ZONES:
+      if (activeZone1 && !manualOverrideZone1) digitalWrite(ZONE_1, LOW);
+      if (activeZone2 && !manualOverrideZone2) digitalWrite(ZONE_2, LOW);
+      if (activeZone3 && !manualOverrideZone3) digitalWrite(ZONE_3, LOW);
+      currentState = WATER_PUMP;
+      stateStartTime = now;
       break;
 
     case WATER_PUMP:
       if (!manualOverrideWater) startWaterPump();
-      currentState   = WATER_DELAY;
+      currentState = WATER_DELAY;
       stateStartTime = now;
       break;
 
     case WATER_DELAY:
-      if (now - stateStartTime >= (unsigned long)activeScheduleDuration * 60000UL) {
-        if (!manualOverrideWater) stopWaterPump();
-        schedulePending = false;
-        currentState    = IDLE;
-        markScheduleExecuted(activeScheduleKey);
-        Serial.printf("✅ Automation finished for key: %s\n",
-                      activeScheduleKey);
+      {
+        unsigned long durMs = ((unsigned long)activeScheduleDuration * 60000UL) + ((unsigned long)activeScheduleDurationSec * 1000UL);
+        if (now - stateStartTime >= durMs) {
+          if (!manualOverrideWater) stopWaterPump();
+          if (!manualOverrideZone1) digitalWrite(ZONE_1, HIGH);
+          if (!manualOverrideZone2) digitalWrite(ZONE_2, HIGH);
+          if (!manualOverrideZone3) digitalWrite(ZONE_3, HIGH);
+          
+          sendLog("Watering finished, resting sensors for 4.5m");
+          currentState = WAIT_END;
+          stateStartTime = now;
+        }
       }
       break;
 
-    default: break;
-  }
-}
+    case WAIT_END:
+      if (now - stateStartTime >= SENSOR_STABILIZATION_DELAY_MIN * 60000UL) {
+        schedulePending = false;
+        currentState    = IDLE;
+        markScheduleExecuted(activeScheduleKey);
+        Serial.printf("✅ Automation completely finished: %s\n", activeScheduleKey);
+      }
+      break;
 
-// ─────────────────────────────────────────────────────────────
-//  BACKGROUND SENSOR TASK
-//  Runs on Core 0 to prevent blocking the pump loop on Core 1
-// ─────────────────────────────────────────────────────────────
+// ================= BACKGROUND TASK (CORE 0) =================
 void backgroundSensorTask(void *pvParameters) {
   for (;;) {
     if (WiFi.status() == WL_CONNECTED) {
       if (millis() - lastSensorRead > SENSOR_INTERVAL) {
         lastSensorRead = millis();
-        readAndSendSensors();
+        // ONLY read quality sensors if an automation schedule is NOT running
+        if (!schedulePending) {
+          readAndSendSensors();
+        }
+        // ALWAYS read water level strictly for the hardware float switches
         readAndSendWaterLevel();
       }
       
@@ -675,6 +764,11 @@ void setup() {
   pinMode(RELAY_A,   OUTPUT);
   pinMode(RELAY_B,   OUTPUT);
   pinMode(RELAY_C,   OUTPUT);
+  pinMode(RELAY_D,   OUTPUT);
+  pinMode(SOLENOID_REFILL, OUTPUT);
+  pinMode(ZONE_1,    OUTPUT);
+  pinMode(ZONE_2,    OUTPUT);
+  pinMode(ZONE_3,    OUTPUT);
 
   // Safe initial states (active-low relays → HIGH = OFF)
   digitalWrite(TDS_POWER, LOW);
@@ -682,6 +776,11 @@ void setup() {
   digitalWrite(RELAY_A,   HIGH);
   digitalWrite(RELAY_B,   HIGH);
   digitalWrite(RELAY_C,   HIGH);
+  digitalWrite(RELAY_D,   HIGH);
+  digitalWrite(SOLENOID_REFILL, HIGH);
+  digitalWrite(ZONE_1,    HIGH);
+  digitalWrite(ZONE_2,    HIGH);
+  digitalWrite(ZONE_3,    HIGH);
 
   DS18B20.begin();
   setupWaterLevelPins();
@@ -701,9 +800,7 @@ void setup() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-//  LOOP
-// ─────────────────────────────────────────────────────────────
+// ================= MAIN LOOP =================
 void loop() {
   // Reconnect if dropped (WiFiManager handles reconnect internally,
   // but this keeps existing timing logic)
@@ -716,8 +813,13 @@ void loop() {
 
   // Sensor and schedule tasks have been moved to backgroundSensorTask
 
+  // — Refill check —
+  manageRefill();
+
   // — State machine —
-  processPumpState();
+  if (!isRefilling) {
+    processPumpState();
+  }
 
   // — Manual pump command poll —
   if (millis() - lastPumpPoll > PUMP_POLL_INTERVAL) {

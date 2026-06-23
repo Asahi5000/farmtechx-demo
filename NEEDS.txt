@@ -1,0 +1,46 @@
+water sensors will stop reading when the following list is running:
+-solenoid valve
+-dosing pump
+-water pump
+*NOTE: after the following list stop running the water sensors will continue after 4-5 mins for sensor stabilization thru voltage distribution.
+---------------------------------------------------------------------
+
+dosing 1 = pH UP
+dosing 2 = pH DOWN
+dosing 3 = EC UP
+dosing 4 = EC DOWN
+
+AUTOMATION STEPS
+STEP 1.) Read the current pH level 
+*NOTE: Water Sensors will stop reading after it read)
+STEP 2.1) -PH UP 
+If the pH level is lower from the set pH level from the website the dosing 1 (pH UP) will run for 6 seconds then after the dosing pump 1 run the water sensors will read after 4-5 mins delay. 
+*Note: This will continue until it reach the set pH level from the website with the +-0.1 to +0.2 margin of error.
+STEP 2.2) -PH DOWN 
+If the pH level is higher from the set pH level from the website the dosing 2 (pH DOWN) will run for 6 seconds then after the dosing pump 2 run the water sensors will read after 4-5 mins delay. 
+*Note: This will continue until it reach the set pH level from the website with the +-0.1 to +0.2 margin of error.
+STEP 3.1) -EC UP
+If the EC level is lower from the set EC level from the website the dosing 3 (EC UP) will run for 6 seconds then after the dosing pump 3 run the water sensors will read after 4-5 mins delay. 
+*Note: This will continue until it reach the set EC level from the website with the +-0.1 to +0.2 margin of error.
+STEP 3.2) -EC DOWN 
+If the EC level is higher from the set EC level from the website the dosing 4 (EC DOWN) will run for 6 seconds then after the dosing pump 4 run the water sensors will read after 4-5 mins delay. 
+*Note: This will continue until it reach the set EC level from the website with the +-0.1 to +0.2 margin of error.
+STEP 4.) The selected Solanoid Valve will open base from the data input from the website. 
+STEP 5.) The main water pump will run base from the data input from the website.
+--------------------------------------------------------------------------------------------------------------------------
+
+GPIO25 ----> IN1 (Refilling Solanoid Valve)
+GPIO27 ----> IN2 (Zone 1)
+GPIO23 ----> IN3 (Zone 2)			
+GPIO22 ----> IN4 (Zone 3)	
+
+REFILLINIG SOLANOID VALVE AUTOMATION STEPS.
+STEP 1.) When the water level reach the lowest level from the tank the main water pump will stop if it's running (*NOTE: the time set for main water pump will pause) then the Refilling Solanoid Valve(GPIO25) will run to refill.
+STEP 2.) When the water level reach the highest level while refilling the tank the Refilling Solanoid Valve(GPIO25) will stop running then when there's a schedule that been postponed or paused the automation will run from the start
+but the timer for the main water pump should not be reset it should continue the remaining time.
+
+
+--------------------------------------------------------------------------------------------------------------------------
+
+Newly insert dosing pump pin
+GPIO19 -----> RELAY_D 	
