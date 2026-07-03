@@ -94,6 +94,7 @@ float activeTargetEC = 0.0f;
 bool activeZone1 = false;
 bool activeZone2 = false;
 bool activeZone3 = false;
+unsigned long savedRemainingWateringMs = 0; // Remembers time if interrupted mid-watering
 
 // Prevent re-firing the same schedule key within the same minute
 char lastExecutedKey[40] = "";
@@ -211,15 +212,31 @@ void setupTime() {
 
 // ================= WATER LEVEL =================
 void setupWaterLevelPins() {
-  pinMode(LEVEL_HIGH, INPUT);
-  pinMode(LEVEL_LOW,  INPUT);
+  pinMode(LEVEL_HIGH, INPUT_PULLUP);
+  pinMode(LEVEL_LOW,  INPUT_PULLUP);
 }
 
 void readAndSendWaterLevel() {
-  int highADC = analogRead(LEVEL_HIGH);
-  int lowADC  = analogRead(LEVEL_LOW);
-  waterHigh = highADC > 0;
-  waterLow  = lowADC  > 0;
+  // HIGH Sensor (maliit) triggers when water pushes it UP (circuit opens -> HIGH)
+  // LOW Sensor (mahaba) triggers when water drains and it drops DOWN (circuit closes -> LOW)
+  bool highTriggered = (digitalRead(LEVEL_HIGH) == HIGH);
+  bool lowTriggered  = (digitalRead(LEVEL_LOW)  == LOW);
+
+  static bool lastWaterHigh = false;
+  static bool lastWaterLow  = false;
+  static unsigned long lastWaterLevelSend = 0;
+
+  bool stateChanged = (highTriggered != lastWaterHigh) || (lowTriggered != lastWaterLow);
+
+  waterHigh = highTriggered;
+  waterLow  = lowTriggered;
+
+  // Send to Firebase INSTANTLY on change, OR every 5 seconds as heartbeat
+  if (!stateChanged && (millis() - lastWaterLevelSend < 5000)) return;
+
+  lastWaterLevelSend = millis();
+  lastWaterHigh = waterHigh;
+  lastWaterLow  = waterLow;
 
   String status;
   if      (waterHigh)  status = "HIGH";
@@ -227,9 +244,9 @@ void readAndSendWaterLevel() {
   else                 status = "EMPTY";
 
   Serial.println("------ WATER LEVEL ------");
-  Serial.printf("HIGH ADC=%d (%s)  LOW ADC=%d (%s)  OVERALL=%s\n",
-                highADC, waterHigh ? "WET" : "DRY",
-                lowADC,  waterLow  ? "WET" : "DRY",
+  Serial.printf("HIGH SENSOR=%s  LOW SENSOR=%s  OVERALL=%s\n",
+                waterHigh ? "TRIGGERED" : "OPEN",
+                waterLow  ? "TRIGGERED" : "OPEN",
                 status.c_str());
 
   // ─── PUT /farmtechx/waterLevel ───
@@ -243,7 +260,7 @@ void readAndSendWaterLevel() {
     int code;
     rtdbRequest("PUT", PATH_WATER_LEVEL, body, &code);
     Serial.printf("   waterLevel PUT → %d\n", code);
-    sendLog("Water level: " + status);
+    if (stateChanged) sendLog("Water level: " + status);
   }
 }
 
@@ -564,7 +581,20 @@ void manageRefill() {
   } else if (waterHigh && isRefilling) {
     isRefilling = false;
     digitalWrite(SOLENOID_REFILL, HIGH);
-    sendLog("Tank HIGH: Refilling done. Automation resumed.");
+    sendLog("Tank HIGH: Refilling finished.");
+
+    // INTERLOCK: If interrupted mid-watering, force a re-dose of the fresh water!
+    if (schedulePending && (currentState == WATER_PUMP || currentState == WATER_DELAY || currentState == OPEN_ZONES)) {
+       unsigned long totalDurMs = ((unsigned long)activeScheduleDuration * 60000UL) + ((unsigned long)activeScheduleDurationSec * 1000UL);
+       unsigned long elapsed = (now > stateStartTime) ? (now - stateStartTime) : 0;
+       
+       if (elapsed < totalDurMs) savedRemainingWateringMs = totalDurMs - elapsed;
+       else savedRemainingWateringMs = 0;
+       
+       currentState = CHECK_PH;
+       sendLog("Interrupted watering: Resuming pH/EC dosing for fresh water!");
+       Serial.println("🔄 Interrupted watering: Resuming pH/EC dosing for fresh water!");
+    }
 
     // Resume operations if we were in the middle of a schedule
     if (schedulePending) {
@@ -705,12 +735,17 @@ void processPumpState() {
 
     case WATER_DELAY:
       {
-        unsigned long durMs = ((unsigned long)activeScheduleDuration * 60000UL) + ((unsigned long)activeScheduleDurationSec * 1000UL);
+        unsigned long durMs = savedRemainingWateringMs > 0 
+                                ? savedRemainingWateringMs 
+                                : (((unsigned long)activeScheduleDuration * 60000UL) + ((unsigned long)activeScheduleDurationSec * 1000UL));
+                                
         if (now - stateStartTime >= durMs) {
           if (!manualOverrideWater) stopWaterPump();
           if (!manualOverrideZone1) digitalWrite(ZONE_1, HIGH);
           if (!manualOverrideZone2) digitalWrite(ZONE_2, HIGH);
           if (!manualOverrideZone3) digitalWrite(ZONE_3, HIGH);
+          
+          savedRemainingWateringMs = 0; // Clear it for next schedule
           
           sendLog("Watering finished, resting sensors for 4.5m");
           currentState = WAIT_END;
@@ -740,9 +775,10 @@ void backgroundSensorTask(void *pvParameters) {
         if (!schedulePending) {
           readAndSendSensors();
         }
-        // ALWAYS read water level strictly for the hardware float switches
-        readAndSendWaterLevel();
       }
+      
+      // ALWAYS check water level extremely fast (independently of 30-sec sensor interval)
+      readAndSendWaterLevel();
       
       if (millis() - lastScheduleCheck > SCHEDULE_INTERVAL) {
         lastScheduleCheck = millis();
@@ -760,7 +796,7 @@ void backgroundSensorTask(void *pvParameters) {
 void setup() {
   Serial.begin(115200);
 
-  // Output pins
+  // Output pins (must be set as OUTPUT first on ESP32 before digitalWrite works)
   pinMode(TDS_POWER, OUTPUT);
   pinMode(PUMP_SSR,  OUTPUT);
   pinMode(RELAY_A,   OUTPUT);
@@ -772,7 +808,7 @@ void setup() {
   pinMode(ZONE_2,    OUTPUT);
   pinMode(ZONE_3,    OUTPUT);
 
-  // Safe initial states (active-low relays → HIGH = OFF)
+  // Immediately force all relays OFF (HIGH = OFF for active-low relays)
   digitalWrite(TDS_POWER, LOW);
   digitalWrite(PUMP_SSR,  HIGH);
   digitalWrite(RELAY_A,   HIGH);

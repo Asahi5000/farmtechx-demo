@@ -129,6 +129,53 @@ function ZoneCard({ zoneKey, label, valve, onSet, loading }: { zoneKey: ZoneKey;
   );
 }
 
+// ─── Tank Level Card ──────────────────────────────────────────────────────────
+function TankLevelCard({ waterLevel }: { waterLevel: { status: string; updatedAt: number } | null }) {
+  const status = waterLevel?.status || "UNKNOWN";
+  
+  let colorClass = "bg-gray-100 text-gray-500";
+  let displayStatus = "WAITING FOR SENSOR...";
+  let tankFillPercent = 0;
+  
+  if (status === "HIGH") {
+    colorClass = "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400";
+    displayStatus = "FULL CAPACITY";
+    tankFillPercent = 100;
+  } else if (status === "LOW") {
+    colorClass = "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400";
+    displayStatus = "CRITICALLY LOW";
+    tankFillPercent = 10;
+  } else if (status === "EMPTY") {
+    colorClass = "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-400";
+    displayStatus = "PARTIAL LEVEL";
+    tankFillPercent = 50;
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 space-y-4 outline outline-2 outline-transparent focus-within:outline-brand-500 transition-all">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h4 className="font-semibold text-gray-800 dark:text-white text-sm flex items-center gap-2">
+          💧 Main Water Tank Status
+        </h4>
+        <span className={`px-3 py-1 rounded-md text-xs font-bold ${colorClass} text-center`}>
+          {displayStatus}
+        </span>
+      </div>
+      
+      <div className="relative h-12 w-full bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+        <div 
+          className="absolute bottom-0 left-0 h-full bg-blue-500/80 transition-all duration-1000 ease-in-out"
+          style={{ width: `${tankFillPercent}%` }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center font-mono text-xs font-bold z-10"
+             style={{ textShadow: "0px 1px 2px rgba(0,0,0,0.8)", color: "white" }}>
+          {status === "LOW" ? "⚠️ AUTO-REFILLING ACTIVE..." : status === "HIGH" ? "MAXIMUM LEVEL REACHED" : "NOMINAL LEVEL"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function PumpsPage() {
   const [mode, setMode] = useState<Mode>(() =>
@@ -154,6 +201,7 @@ export default function PumpsPage() {
   const [schLoading, setSchLoading]   = useState(false);
 
   const [valves,        setValves]        = useState<SolenoidValves | null>(null);
+  const [waterLevel,    setWaterLevel]    = useState<{ status: string; updatedAt: number } | null>(null);
   const [soil,    setSoil]    = useState<SoilData | null>(null);
   const [rain,    setRain]    = useState<RainData | null>(null);
   const [loadingValve, setLoadingValve] = useState<Record<ZoneKey, boolean>>({
@@ -167,6 +215,7 @@ export default function PumpsPage() {
       listenTo<DosingPumps>(PATHS.DOSING_PUMPS, setDosingPumps),
       listenTo<Record<string, WaterSchedule>>(PATHS.SCHEDULES, (d) => setSchedules(d ?? {})),
       listenTo<SolenoidValves>(PATHS.SOLENOID_VALVES, setValves),
+      listenTo<{ status: string; updatedAt: number }>(PATHS.WATER_LEVEL, setWaterLevel),
       listenTo<SoilData>(PATHS.SOIL_DATA, setSoil),
       listenTo<RainData>(PATHS.RAIN_DATA, setRain),
     ];
@@ -291,6 +340,8 @@ export default function PumpsPage() {
           ))}
         </div>
       </div>
+
+      <TankLevelCard waterLevel={waterLevel} />
 
       {mode === "manual" ? (
         <section className="space-y-4">
