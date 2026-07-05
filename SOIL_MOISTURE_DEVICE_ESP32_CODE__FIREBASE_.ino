@@ -1,18 +1,6 @@
 // ============================================================
 //  FarmTechX — SOIL MOISTURE / RAIN SENSOR DEVICE
-//  Updated for Firebase Realtime Database (REST API)
-//  Changes from original:
-//    • HTTP POST to PHP → HTTPS PUT to Firebase RTDB
-//    • Hardcoded WiFi → WiFiManager (captive-portal provisioning)
-//    • NTP time sync added (needed for updatedAt timestamps)
-//    • All RS485 Modbus soil sensor logic UNCHANGED
-//    • All rain sensor (DO + AO) logic UNCHANGED
 // ============================================================
-
-// ─── LIBRARY REQUIREMENTS (install via Arduino Library Manager) ───
-// • WiFiManager  by tzapu  (search "WiFiManager")
-// • ArduinoJson  v6        (search "ArduinoJson")
-// • WiFiClientSecure  (bundled with ESP32 Arduino core)
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -58,10 +46,7 @@ int  rainIntensity = 0;
 // ================= SENSOR ID =================
 #define SENSOR_ID 2
 
-// ─────────────────────────────────────────────────────────────
-//  HTTPS helper — PUT a JSON body to a RTDB path
-//  Returns HTTP response code
-// ─────────────────────────────────────────────────────────────
+// HTTPS helper — PUT a JSON body to a RTDB path
 int rtdbPut(const char* path, const String& body) {
   WiFiClientSecure client;
   client.setInsecure();   // skip cert verify (OK for dev; load CA for production)
@@ -77,9 +62,7 @@ int rtdbPut(const char* path, const String& body) {
   return code;
 }
 
-// ─────────────────────────────────────────────────────────────
-//  HTTPS POST helper (for log entries — each POST = new auto-key)
-// ─────────────────────────────────────────────────────────────
+// HTTPS POST helper (for log entries)
 int rtdbPost(const char* path, const String& body) {
   WiFiClientSecure client;
   client.setInsecure();
@@ -94,9 +77,7 @@ int rtdbPost(const char* path, const String& body) {
   return code;
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Logging helper — POST timestamped message to Firebase
-// ─────────────────────────────────────────────────────────────
+// Logging helper — POST timestamped message to Firebase
 void sendLog(const String& message) {
   struct tm t;
   if (!getLocalTime(&t)) return;    // skip if NTP not ready
@@ -110,12 +91,7 @@ void sendLog(const String& message) {
   rtdbPost(PATH_LOG_SOIL, body);
 }
 
-// ─────────────────────────────────────────────────────────────
-//  WiFi + WiFiManager setup
-//  On first boot opens AP "FarmTechX-SoilDevice".
-//  Connect phone to that AP → browser captive portal opens →
-//  enter SSID + password → saved to flash.
-// ─────────────────────────────────────────────────────────────
+// WiFi + WiFiManager setup
 void setupWiFi() {
   WiFiManager wm;
   wm.setConfigPortalTimeout(180);   // portal stays open 3 min
@@ -133,9 +109,7 @@ void setupWiFi() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  NTP time sync
-// ─────────────────────────────────────────────────────────────
+// NTP time sync
 void setupTime() {
   configTime(TZ_OFFSET_SEC, 0, NTP_SERVER1, NTP_SERVER2);
   struct tm timeinfo;
@@ -154,9 +128,7 @@ void setupTime() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-//  Modbus RTU read helper — UNCHANGED from original
-// ─────────────────────────────────────────────────────────────
+// Modbus RTU read helper
 bool readRegisters(byte slaveID, uint16_t startReg,
                    uint16_t numRegs, byte* response) {
   byte req[8];
