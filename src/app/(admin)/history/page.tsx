@@ -6,6 +6,13 @@ import type { WaterSensorReading } from "@/types";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
+const getReadingDate = (createdAt: number | string | undefined) => {
+  if (!createdAt) return new Date(0);
+  const ts = Number(createdAt);
+  const tsMs = ts < 1e12 ? ts * 1000 : ts;
+  return new Date(tsMs);
+};
+
 export default function HistoryPage() {
   const [readings, setReadings] = useState<{ key: string; value: WaterSensorReading }[]>([]);
   const [startDate, setStartDate] = useState("");
@@ -21,7 +28,7 @@ export default function HistoryPage() {
 
   const filtered = readings.filter((r) => {
     if (!startDate && !endDate) return true;
-    const ts = new Date(r.value.createdAt);
+    const ts = getReadingDate(r.value.createdAt);
     const start = startDate ? new Date(startDate) : null;
     const end = endDate ? new Date(endDate + "T23:59:59") : null;
     if (start && ts < start) return false;
@@ -145,7 +152,7 @@ export default function HistoryPage() {
               chart: { type: "line", animations: { enabled: true }, toolbar: { show: false }, background: "transparent" },
               stroke: { curve: "smooth", width: 2 },
               xaxis: {
-                categories: filtered.map((r) => new Date(r.value.createdAt).toLocaleTimeString()),
+                categories: filtered.map((r) => getReadingDate(r.value.createdAt).toLocaleTimeString()),
                 labels: { rotate: -45, style: { fontSize: "10px" } },
                 tickAmount: 10,
               },
@@ -190,10 +197,10 @@ export default function HistoryPage() {
                   </td>
                 </tr>
               ) : (
-                paginatedData.reverse().map((r) => (
+                [...paginatedData].reverse().map((r) => (
                   <tr key={r.key} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                     <td className="px-5 py-3 font-medium text-gray-800 dark:text-white">
-                      {new Date(r.value.createdAt).toLocaleString()}
+                      {getReadingDate(r.value.createdAt).toLocaleString()}
                     </td>
                     <td className="px-5 py-3 text-right text-gray-600 dark:text-gray-300">
                       {r.value.temperature?.toFixed(2) ?? "—"}

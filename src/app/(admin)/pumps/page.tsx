@@ -295,8 +295,8 @@ export default function PumpsPage() {
         ampm: schAmpm,
         duration: schDuration,
         durationSec: schDurationSec,
-        targetPH: schTargetPh ? Number(schTargetPh) : undefined,
-        targetEC: schTargetEc ? Number(schTargetEc) : undefined,
+        targetPH: schTargetPh ? Number(schTargetPh) : 0,
+        targetEC: schTargetEc ? Number(schTargetEc) : 0,
         zones: schZones,
       });
     } finally {

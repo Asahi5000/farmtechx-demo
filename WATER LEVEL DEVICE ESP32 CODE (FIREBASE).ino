@@ -325,8 +325,8 @@ void readAndSendSensors() {
 bool checkSoilRain() {
   if (WiFi.status() != WL_CONNECTED) return false;
 
-  float moisture  = 0;
-  bool  isRaining = false;
+  float moisture     = 0;
+  int   rainIntensity = 0;
 
   // — soilData/latest —
   String soilRaw = rtdbRequest("GET", PATH_SOIL_LATEST);
@@ -343,13 +343,15 @@ bool checkSoilRain() {
   if (rainRaw.length() > 2) {
     JsonDocument doc;
     if (!deserializeJson(doc, rainRaw)) {
-      isRaining = doc["isRaining"] | false;
-      Serial.printf("☔ Is raining: %s\n", isRaining ? "YES" : "NO");
+      rainIntensity = doc["rainIntensity"] | 0;
+      Serial.printf("🌧 Rain intensity: %d%%\n", rainIntensity);
     }
   }
 
-  if (moisture >= 50 || isRaining) {
-    Serial.println("⚠️ Moisture or rain detected — skipping automation");
+  // STOP irrigation if soil is wet (≥50%) OR rain is heavy (≥50%)
+  if (moisture >= 50.0f || rainIntensity >= 50) {
+    Serial.printf("⚠️ Irrigation blocked — Moisture:%.1f%% Rain:%d%%\n", moisture, rainIntensity);
+    sendLog("Irrigation blocked: Moisture=" + String(moisture,1) + "% Rain=" + String(rainIntensity) + "%");
     return false;
   }
   return true;
@@ -360,9 +362,13 @@ void markScheduleExecuted(const char* key) {
   if (!key || strlen(key) == 0) return;
   Serial.printf("📌 Marking schedule executed: %s\n", key);
 
-  unsigned long epochMs = (unsigned long)time(nullptr) * 1000UL;
+  uint64_t epochMs = (uint64_t)time(nullptr) * 1000ULL;
   String path = String(PATH_SCHEDULES) + "/" + key + "/lastExecuted";
-  String body = String(epochMs);
+  
+  JsonDocument doc;
+  doc.set(epochMs);
+  String body;
+  serializeJson(doc, body);
 
   unsigned long start = millis();
   bool success = false;
@@ -483,6 +489,7 @@ void checkManualFromRTDB() {
 // ================= CHECK FIREBASE SCHEDULE =================
 void checkWaterSchedules() {
   if (WiFi.status() != WL_CONNECTED) return;
+  if (schedulePending) return;  // Don't check for new schedules while one is already running
   struct tm t;
   if (!getLocalTime(&t)) return;
 
@@ -524,8 +531,8 @@ void checkWaterSchedules() {
 
     bool alreadyDone = (strcmp(key, lastExecutedKey) == 0);
 
-    // Fire if within ±1 minute of schedule and not yet executed this cycle
-    if (abs(nowMin - schedMin) <= 1 && !alreadyDone) {
+    // Fire if within ±2 minutes of schedule and not yet executed this cycle
+    if (abs(nowMin - schedMin) <= 2 && !alreadyDone) {
       strlcpy(lastExecutedKey, key, sizeof(lastExecutedKey));
 
       if (!checkSoilRain()) {
@@ -621,8 +628,13 @@ void manageRefill() {
 void processPumpState() {
   if (!schedulePending) return;
 
-  // Mid-run soil/rain check
-  if (!checkSoilRain()) {
+  uint32_t now = millis();
+
+  // Mid-run soil/rain check (rate limited to once per minute to avoid Firebase HTTP spam!)
+  static unsigned long lastMidRunCheck = 0;
+  if (now - lastMidRunCheck > 60000UL) {
+    lastMidRunCheck = now;
+    if (!checkSoilRain()) {
     Serial.println("⚠️ Automation suspended mid-run (moisture/rain)");
     stopDosing('A'); stopDosing('B'); stopDosing('C'); stopDosing('D'); stopWaterPump();
     digitalWrite(ZONE_1, HIGH); digitalWrite(ZONE_2, HIGH); digitalWrite(ZONE_3, HIGH);
@@ -630,9 +642,8 @@ void processPumpState() {
     currentState    = IDLE;
     markScheduleExecuted(activeScheduleKey);
     return;
+    }
   }
-
-  unsigned long now = millis();
 
   switch (currentState) {
     case CHECK_PH:
@@ -796,29 +807,17 @@ void backgroundSensorTask(void *pvParameters) {
 void setup() {
   Serial.begin(115200);
 
-  // Output pins (must be set as OUTPUT first on ESP32 before digitalWrite works)
-  pinMode(TDS_POWER, OUTPUT);
-  pinMode(PUMP_SSR,  OUTPUT);
-  pinMode(RELAY_A,   OUTPUT);
-  pinMode(RELAY_B,   OUTPUT);
-  pinMode(RELAY_C,   OUTPUT);
-  pinMode(RELAY_D,   OUTPUT);
-  pinMode(SOLENOID_REFILL, OUTPUT);
-  pinMode(ZONE_1,    OUTPUT);
-  pinMode(ZONE_2,    OUTPUT);
-  pinMode(ZONE_3,    OUTPUT);
-
-  // Immediately force all relays OFF (HIGH = OFF for active-low relays)
-  digitalWrite(TDS_POWER, LOW);
-  digitalWrite(PUMP_SSR,  HIGH);
-  digitalWrite(RELAY_A,   HIGH);
-  digitalWrite(RELAY_B,   HIGH);
-  digitalWrite(RELAY_C,   HIGH);
-  digitalWrite(RELAY_D,   HIGH);
-  digitalWrite(SOLENOID_REFILL, HIGH);
-  digitalWrite(ZONE_1,    HIGH);
-  digitalWrite(ZONE_2,    HIGH);
-  digitalWrite(ZONE_3,    HIGH);
+  // Initialize and immediately turn OFF each relay sequentially to prevent massive inrush current (boot crashing)
+  pinMode(TDS_POWER, OUTPUT);       digitalWrite(TDS_POWER, LOW);
+  pinMode(PUMP_SSR,  OUTPUT);       digitalWrite(PUMP_SSR,  HIGH);
+  pinMode(RELAY_A,   OUTPUT);       digitalWrite(RELAY_A,   HIGH);
+  pinMode(RELAY_B,   OUTPUT);       digitalWrite(RELAY_B,   HIGH);
+  pinMode(RELAY_C,   OUTPUT);       digitalWrite(RELAY_C,   HIGH);
+  pinMode(RELAY_D,   OUTPUT);       digitalWrite(RELAY_D,   HIGH);
+  pinMode(SOLENOID_REFILL, OUTPUT); digitalWrite(SOLENOID_REFILL, HIGH);
+  pinMode(ZONE_1,    OUTPUT);       digitalWrite(ZONE_1,    HIGH);
+  pinMode(ZONE_2,    OUTPUT);       digitalWrite(ZONE_2,    HIGH);
+  pinMode(ZONE_3,    OUTPUT);       digitalWrite(ZONE_3,    HIGH);
 
   DS18B20.begin();
   setupWaterLevelPins();

@@ -64,8 +64,15 @@ export default function DashboardPage() {
     return () => unsubs.forEach((u) => u());
   }, []);
 
+  const getReadingDate = (createdAt: number | string | undefined) => {
+    if (!createdAt) return new Date(0);
+    const ts = Number(createdAt);
+    const tsMs = ts < 1e12 ? ts * 1000 : ts;
+    return new Date(tsMs);
+  };
+
   const timestamps = history.map((r) =>
-    new Date(r.value.createdAt).toLocaleTimeString()
+    getReadingDate(r.value.createdAt).toLocaleTimeString()
   );
 
   const chartOptions: ApexCharts.ApexOptions = {
@@ -95,8 +102,11 @@ export default function DashboardPage() {
     EMPTY: "bg-red-100 text-red-700",
   };
 
-  const fmt = (ts?: number) =>
-    ts ? new Date(ts).toLocaleTimeString() : "—";
+  const fmt = (ts?: number) => {
+    if (!ts) return "—";
+    const tsMs = ts < 1e12 ? ts * 1000 : ts;
+    return new Date(tsMs).toLocaleTimeString();
+  };
 
   return (
     <div className="space-y-6">

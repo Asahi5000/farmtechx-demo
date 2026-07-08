@@ -190,9 +190,9 @@ void setup() {
 //  LOOP
 // ─────────────────────────────────────────────────────────────
 void loop() {
-  moisture = temperature = ph = ec = 0;
-
-  // ─── Read soil via Modbus (UNCHANGED) ───
+  // We no longer reset moisture/ph/etc to 0 every loop.
+  // This prevents the UI from bouncing between 0 and real data
+  // if a Modbus reading timeout occurs.
   if (readRegisters(0x01, 0x0000, 2, resp)) {
     moisture    = ((resp[3] << 8) | resp[4]) / 10.0f;
     int tempRaw = (resp[5] << 8) | resp[6];
@@ -205,20 +205,24 @@ void loop() {
     ec = ((resp[5] << 8) | resp[6]) / 100.0f;
   }
 
-  // ─── Read rain sensor (UNCHANGED) ───
+  // ─── Read rain sensor ───
   bool wasRaining = isRaining;
-  isRaining     = digitalRead(RAIN_DO_PIN) == LOW;
-  rainIntensity = analogRead(RAIN_AO_PIN);
-  int rainAnalog = map(rainIntensity, 0, 4095, 0, 1023);
-  if (isRaining && !wasRaining)  sendLog("Rain detected - intensity: " + String(rainAnalog));
+  isRaining     = digitalRead(RAIN_DO_PIN) == LOW; // DO pulls LOW when rain hits threshold
+
+  int rainIntensityRaw = analogRead(RAIN_AO_PIN);
+  // AO drops from 4095 (bone dry) to near 0 (completely submerged)
+  int rainPercent = map(rainIntensityRaw, 4095, 0, 0, 100);
+  rainPercent = constrain(rainPercent, 0, 100);
+
+  if (isRaining && !wasRaining)  sendLog("Rain detected - intensity: " + String(rainPercent) + "%");
   if (!isRaining && wasRaining)  sendLog("Rain stopped");
 
   // ─── Debug output ───
   Serial.printf(
     "🌱 Moisture:%.2f%%  🌡Temp:%.2f°C  🧪pH:%.2f  💧EC:%.2f  "
-    "🌧Rain:%s  Intensity:%d\n",
+    "🌧Rain:%s  Intensity:%d%%\n",
     moisture, temperature, ph, ec,
-    isRaining ? "YES" : "NO", rainAnalog
+    isRaining ? "YES" : "NO", rainPercent
   );
 
   // ─── Get current epoch timestamp (seconds) ───
@@ -248,11 +252,10 @@ void loop() {
     }
 
     // ─── PUT /farmtechx/rainData/latest ───
-    // isRaining matches the RainData interface { isRaining: bool, intensity?: number, updatedAt: number }
     {
       JsonDocument doc;
       doc["isRaining"]     = isRaining;
-      doc["rainIntensity"] = rainAnalog;
+      doc["rainIntensity"] = rainPercent;
       doc["updatedAt"]     = epochSec;
       String body;
       serializeJson(doc, body);

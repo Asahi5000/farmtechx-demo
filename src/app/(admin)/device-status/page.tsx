@@ -193,6 +193,7 @@ function DeviceCard({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function DeviceStatusPage() {
   const [latestWater, setLatestWater] = useState<WaterSensorReading | null>(null);
+  const [waterLevel, setWaterLevel]   = useState<{ status: string; updatedAt: number } | null>(null);
   const [soil, setSoil]               = useState<SoilData | null>(null);
   const [tick, setTick]               = useState(0);
 
@@ -203,6 +204,7 @@ export default function DeviceStatusPage() {
   useEffect(() => {
     const unsubs = [
       listenTo<SoilData>(PATHS.SOIL_DATA, setSoil),
+      listenTo<{ status: string; updatedAt: number }>(PATHS.WATER_LEVEL, setWaterLevel),
       listenToLatestWaterReadings(1, (readings) => {
         if (readings.length > 0) setLatestWater(readings[0].value);
       }),
@@ -215,6 +217,11 @@ export default function DeviceStatusPage() {
     const id = setInterval(() => setTick((t) => t + 1), 5000);
     return () => clearInterval(id);
   }, []);
+
+  // Determine Water Device's last active timestamp (seconds since epoch)
+  const waterSensorTs = latestWater?.createdAt || 0;
+  const waterLevelTs = waterLevel?.updatedAt ? Math.floor(waterLevel.updatedAt / 1000) : 0;
+  const activeWaterTime = Math.max(waterSensorTs, waterLevelTs);
 
   return (
     <div className="space-y-6">
@@ -235,7 +242,7 @@ export default function DeviceStatusPage() {
         <DeviceCard
           label="Water Device"
           icon="💧"
-          updatedAt={latestWater?.createdAt}
+          updatedAt={activeWaterTime > 0 ? activeWaterTime : undefined}
           logPath={PATHS.LOG_WATER}
           logsOpen={waterLogsOpen}
           onLogsToggle={() => setWaterLogsOpen((o) => !o)}
