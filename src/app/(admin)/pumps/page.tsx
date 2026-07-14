@@ -312,9 +312,9 @@ export default function PumpsPage() {
 
   const sortedSchedules = Object.entries(schedules).sort(([, a], [, b]) => {
     const toMins = (s: WaterSchedule) => {
-      let h = s.hour % 12;
+      let h = (s.hour ?? 0) % 12;
       if (s.ampm === "PM") h += 12;
-      return h * 60 + s.minute;
+      return h * 60 + (s.minute ?? 0);
     };
     return toMins(a) - toMins(b);
   });
@@ -467,10 +467,12 @@ export default function PumpsPage() {
                   sortedSchedules.map(([id, s]) => (
                     <tr key={id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                       <td className="px-5 py-3 font-medium text-gray-800 dark:text-white">
-                        {String(s.hour).padStart(2, "0")}:{String(s.minute).padStart(2, "0")} {s.ampm}
+                        {s.hour != null && s.minute != null
+                          ? `${String(s.hour).padStart(2, "0")}:${String(s.minute).padStart(2, "0")} ${s.ampm ?? ''}`
+                          : <span className="text-red-400">Invalid</span>}
                       </td>
                       <td className="px-5 py-3 text-gray-600 dark:text-gray-300">
-                        {s.duration}m {s.durationSec ? `${s.durationSec}s` : ''}
+                        {s.duration ?? 0}m {s.durationSec ? `${s.durationSec}s` : ''}
                       </td>
                       <td className="px-5 py-3 text-gray-600 dark:text-gray-300">
                         {s.targetPH ? `pH ${s.targetPH}` : '--'} / {s.targetEC ? `EC ${s.targetEC}` : '--'}
@@ -479,7 +481,9 @@ export default function PumpsPage() {
                         {s.zones && s.zones.length > 0 ? s.zones.map(z => `Z${z}`).join(', ') : '--'}
                       </td>
                       <td className="px-5 py-3 text-gray-500 dark:text-gray-400 text-xs">
-                        {s.lastExecuted ? new Date(s.lastExecuted).toLocaleString() : <span className="text-gray-300 dark:text-gray-600">Never</span>}
+                        {s.lastExecuted
+                          ? new Date(Number(s.lastExecuted) < 1e12 ? Number(s.lastExecuted) * 1000 : Number(s.lastExecuted)).toLocaleString()
+                          : <span className="text-gray-300 dark:text-gray-600">Never</span>}
                       </td>
                       <td className="px-5 py-3 text-right">
                         <button onClick={() => setDeleteTarget(id)}

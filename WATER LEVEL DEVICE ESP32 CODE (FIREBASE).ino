@@ -76,8 +76,8 @@ bool  waterHigh = false, waterLow = false;
 // ================= PUMP STATE MACHINE =================
 enum PumpState {
   IDLE,
-  CHECK_PH, DOSING_PH_UP, DOSING_PH_DOWN, WAIT_PH,
-  CHECK_EC, DOSING_EC_UP, DOSING_EC_DOWN, WAIT_EC,
+  CHECK_PH, DOSING_PH_UP, DOSING_PH_DOWN, WAIT_PH, WARMUP_PH,
+  CHECK_EC, DOSING_EC_UP, DOSING_EC_DOWN, WAIT_EC, WARMUP_EC,
   OPEN_ZONES, WATER_PUMP, WATER_DELAY, WAIT_END
 };
 PumpState currentState  = IDLE;
@@ -117,6 +117,7 @@ unsigned long lastLoopTime = 0;
 unsigned long lastSensorRead   = 0;
 unsigned long lastScheduleCheck = 0;
 unsigned long lastPumpPoll     = 0;
+unsigned long lastAutomationSensorRead = 0;
 
 // ================= FIREBASE HTTPS REQUEST =================
 String rtdbRequest(const char* method, const char* path,
@@ -684,7 +685,21 @@ void processPumpState() {
 
     case WAIT_PH:
       if (now - stateStartTime >= SENSOR_STABILIZATION_DELAY_MIN * 60000UL) {
+        currentState = WARMUP_PH;
+        stateStartTime = now;
+        lastAutomationSensorRead = 0; // Force immediate read inside warmup
+      }
+      break;
+
+    case WARMUP_PH:
+      // Loop for 15 seconds, pinging sensors every 3 seconds to let probes settle
+      if (now - lastAutomationSensorRead >= 3000UL) {
+        readAndSendSensors();
+        lastAutomationSensorRead = now;
+      }
+      if (now - stateStartTime >= 15000UL) {
         currentState = CHECK_PH;
+        stateStartTime = now;
       }
       break;
 
@@ -726,7 +741,21 @@ void processPumpState() {
 
     case WAIT_EC:
       if (now - stateStartTime >= SENSOR_STABILIZATION_DELAY_MIN * 60000UL) {
+        currentState = WARMUP_EC;
+        stateStartTime = now;
+        lastAutomationSensorRead = 0; // Force immediate read inside warmup
+      }
+      break;
+
+    case WARMUP_EC:
+      // Loop for 15 seconds, pinging sensors every 3 seconds to let probes settle
+      if (now - lastAutomationSensorRead >= 3000UL) {
+        readAndSendSensors();
+        lastAutomationSensorRead = now;
+      }
+      if (now - stateStartTime >= 15000UL) {
         currentState = CHECK_EC;
+        stateStartTime = now;
       }
       break;
 
