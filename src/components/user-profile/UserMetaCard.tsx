@@ -5,7 +5,7 @@ import { updateProfile } from "firebase/auth";
 import { useToast } from "@/context/ToastContext";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/config/firebase";
+import { firestore, storage } from "@/config/firebase";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, X, Loader2 } from "lucide-react";
 import Button from "../ui/button/Button";
@@ -42,7 +42,7 @@ export default function UserMetaCard() {
     async function loadProfile() {
       if (!user) return;
       try {
-        const snap = await getDoc(doc(db, "adminProfiles", user.uid));
+        const snap = await getDoc(doc(firestore, "adminProfiles", user.uid));
         if (snap.exists()) {
           const data = snap.data() as AdminProfile;
           setProfileData(data);
@@ -114,7 +114,7 @@ export default function UserMetaCard() {
         address: address.trim(),
         country: country.trim(),
       };
-      await setDoc(doc(db, "adminProfiles", user.uid), extraFields, { merge: true });
+      await setDoc(doc(firestore, "adminProfiles", user.uid), extraFields, { merge: true });
 
       setProfileData(extraFields);
       showToast("Profile updated successfully.", "success");

@@ -1,4 +1,4 @@
-import { ref, onValue, set, push, remove, off } from 'firebase/database';
+import { ref, onValue, set, push, remove, off, query, limitToLast } from 'firebase/database';
 import { db } from './firebase';
 import type { PumpState, WaterSchedule, SolenoidValve, ZoneSchedule } from '@/types';
 
@@ -26,16 +26,26 @@ export function listenToLatestWaterReadings(
   count: number,
   callback: (readings: { key: string; value: any }[]) => void
 ): () => void {
-  const r = ref(db, PATHS.WATER_SENSORS);
+  const r = query(ref(db, PATHS.WATER_SENSORS), limitToLast(count));
   onValue(r, (snap) => {
     if (!snap.exists()) return callback([]);
     const all: { key: string; value: any }[] = [];
     snap.forEach((child) => {
       all.push({ key: child.key!, value: child.val() });
     });
-    callback(all.slice(-count));
+    callback(all);
   });
-  return () => off(r);
+  return () => off(r.ref);
+}
+
+export function listenToLatestLogs(
+  path: string,
+  count: number,
+  callback: (data: Record<string, any> | null) => void
+): () => void {
+  const r = query(ref(db, path), limitToLast(count));
+  onValue(r, (snap) => callback(snap.exists() ? snap.val() : null));
+  return () => off(r.ref);
 }
 
 export async function setPumpState(pump: 'main' | 'A' | 'B' | 'C' | 'D', state: PumpState): Promise<void> {

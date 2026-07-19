@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import { listenTo, listenToLatestWaterReadings, PATHS } from "@/config/realtimeService";
+import { listenTo, listenToLatestWaterReadings, listenToLatestLogs, PATHS } from "@/config/realtimeService";
 import type { WaterSensorReading, SoilData } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -60,8 +60,9 @@ function LiveLogs({
 
   useEffect(() => {
     if (!open) return;
-    const unsub = listenTo<Record<string, { timestamp: string; message: string }>>(
+    const unsub = listenToLatestLogs(
       logPath,
+      50,
       (data) => {
         if (!data) return setLogs([]);
         const entries = Object.entries(data)

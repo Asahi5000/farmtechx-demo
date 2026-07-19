@@ -13,13 +13,20 @@ const getReadingDate = (createdAt: number | string | undefined) => {
   return new Date(tsMs);
 };
 
+const toLocalDateStr = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 export default function HistoryPage() {
   const [readings, setReadings] = useState<{ key: string; value: WaterSensorReading }[]>([]);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [startDate, setStartDate] = useState(() => toLocalDateStr(new Date()));
+  const [endDate, setEndDate] = useState(() => toLocalDateStr(new Date()));
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<string | null>('today');
 
   useEffect(() => {
     const unsub = listenToLatestWaterReadings(200, (data) => setReadings(data as any));
@@ -29,8 +36,9 @@ export default function HistoryPage() {
   const filtered = readings.filter((r) => {
     if (!startDate && !endDate) return true;
     const ts = getReadingDate(r.value.createdAt);
-    const start = startDate ? new Date(startDate) : null;
-    const end = endDate ? new Date(endDate + "T23:59:59") : null;
+    // Parse as LOCAL dates by splitting the string ourselves
+    const start = startDate ? new Date(Number(startDate.split('-')[0]), Number(startDate.split('-')[1]) - 1, Number(startDate.split('-')[2])) : null;
+    const end = endDate ? new Date(Number(endDate.split('-')[0]), Number(endDate.split('-')[1]) - 1, Number(endDate.split('-')[2]), 23, 59, 59) : null;
     if (start && ts < start) return false;
     if (end && ts > end) return false;
     return true;
@@ -48,27 +56,27 @@ export default function HistoryPage() {
 
   const applyQuickFilter = (filter: string) => {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayStr = toLocalDateStr(now);
     setActiveFilter(filter);
     setCurrentPage(1);
 
     switch (filter) {
       case 'today':
-        setStartDate(today.toISOString().split('T')[0]);
-        setEndDate(today.toISOString().split('T')[0]);
+        setStartDate(todayStr);
+        setEndDate(todayStr);
         break;
-      case 'week':
-        const weekAgo = new Date(today);
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        setStartDate(weekAgo.toISOString().split('T')[0]);
-        setEndDate(today.toISOString().split('T')[0]);
+      case 'week': {
+        const weekAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+        setStartDate(toLocalDateStr(weekAgo));
+        setEndDate(todayStr);
         break;
-      case 'month':
-        const monthAgo = new Date(today);
-        monthAgo.setMonth(monthAgo.getMonth() - 1);
-        setStartDate(monthAgo.toISOString().split('T')[0]);
-        setEndDate(today.toISOString().split('T')[0]);
+      }
+      case 'month': {
+        const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        setStartDate(toLocalDateStr(monthAgo));
+        setEndDate(todayStr);
         break;
+      }
       case 'all':
         setStartDate('');
         setEndDate('');

@@ -55,7 +55,7 @@
 #define PH_SAMPLES        20
 #define SENSOR_INTERVAL   10000UL   // ms between sensor reads
 #define SCHEDULE_INTERVAL 30000UL   // ms between schedule polls
-#define PUMP_POLL_INTERVAL 500UL    // ms between manual command polls
+#define PUMP_POLL_INTERVAL 5000UL   // ms between manual command polls (increased to prevent TLS exhaustion)
 
 const float PH_SLOPE  = -14.12f;
 const float PH_OFFSET =  30.96f;
@@ -76,8 +76,8 @@ bool  waterHigh = false, waterLow = false;
 // ================= PUMP STATE MACHINE =================
 enum PumpState {
   IDLE,
-  CHECK_PH, DOSING_PH_UP, DOSING_PH_DOWN, WAIT_PH,
-  CHECK_EC, DOSING_EC_UP, DOSING_EC_DOWN, WAIT_EC,
+  CHECK_PH, DOSING_PH_UP, DOSING_PH_DOWN, WAIT_PH, WARMUP_PH,
+  CHECK_EC, DOSING_EC_UP, DOSING_EC_DOWN, WAIT_EC, WARMUP_EC,
   OPEN_ZONES, WATER_PUMP, WATER_DELAY, WAIT_END
 };
 PumpState currentState  = IDLE;
@@ -117,11 +117,16 @@ unsigned long lastLoopTime = 0;
 unsigned long lastSensorRead   = 0;
 unsigned long lastScheduleCheck = 0;
 unsigned long lastPumpPoll     = 0;
+unsigned long lastAutomationSensorRead = 0;
 
 // ================= FIREBASE HTTPS REQUEST =================
+SemaphoreHandle_t rtdbMutex = NULL;
+
 String rtdbRequest(const char* method, const char* path,
                    const String& body = "",
                    int* httpCode_out = nullptr) {
+  if (rtdbMutex) xSemaphoreTake(rtdbMutex, portMAX_DELAY);
+  
   WiFiClientSecure client;
   client.setInsecure();   // skip cert verify (OK for embedded; use CA for prod)
 
@@ -145,11 +150,17 @@ String rtdbRequest(const char* method, const char* path,
     code = http.PATCH(body);
   }
 
-  if (code > 0) response = http.getString();
-  else Serial.printf("❌ RTDB %s %s → error %d\n", method, path, code);
+  if (code == 200) {
+    response = http.getString();
+  } else {
+    Serial.printf("❌ RTDB %s %s → HTTP %d\n", method, path, code);
+    if (code > 0) Serial.println("Response: " + http.getString());
+  }
 
   if (httpCode_out) *httpCode_out = code;
   http.end();
+  
+  if (rtdbMutex) xSemaphoreGive(rtdbMutex);
   return response;
 }
 
@@ -160,7 +171,10 @@ void sendLog(const String& message) {
   lastLogTime = millis();
 
   struct tm t;
-  if (!getLocalTime(&t)) return;               // skip if NTP not ready
+  if (!getLocalTime(&t)) {
+    Serial.println("⚠️ sendLog: getLocalTime failed! Skipping log.");
+    return;
+  }
   char timestamp[10];
   sprintf(timestamp, "%02d:%02d:%02d", t.tm_hour, t.tm_min, t.tm_sec);
 
@@ -169,8 +183,10 @@ void sendLog(const String& message) {
   doc["message"]   = message;
   String body;
   serializeJson(doc, body);
-  // POST → each call gets a unique auto-key, building a log list
-  rtdbRequest("POST", PATH_LOG_WATER, body);
+  
+  int code;
+  rtdbRequest("POST", PATH_LOG_WATER, body, &code);
+  Serial.printf("   sendLog POST → %d\n", code);
 }
 
 // ================= WIFI SETUP =================
@@ -231,8 +247,8 @@ void readAndSendWaterLevel() {
   waterHigh = highTriggered;
   waterLow  = lowTriggered;
 
-  // Send to Firebase INSTANTLY on change, OR every 5 seconds as heartbeat
-  if (!stateChanged && (millis() - lastWaterLevelSend < 5000)) return;
+  // Send to Firebase INSTANTLY on change, OR every 20 seconds as heartbeat
+  if (!stateChanged && (millis() - lastWaterLevelSend < 20000)) return;
 
   lastWaterLevelSend = millis();
   lastWaterHigh = waterHigh;
@@ -319,6 +335,13 @@ void readAndSendSensors() {
     rtdbRequest("POST", PATH_SENSORS_WATER, body, &code);
     Serial.printf("   sensors/water POST → %d\n", code);
   }
+}
+
+// Lightweight heartbeat — updates waterLevel timestamp to keep device ONLINE
+// without recording sensor data to history
+void sendHeartbeat() {
+  readAndSendWaterLevel(); // This already PUTs to /farmtechx/waterLevel with updatedAt
+  Serial.println("Heartbeat sent (keeping device ONLINE)");
 }
 
 // ================= CHECK SOIL/RAIN =================
@@ -652,10 +675,12 @@ void processPumpState() {
         currentState = CHECK_EC;
       } else if (phValue < (activeTargetPH - 0.5f)) {
         currentState = DOSING_PH_UP;
-        stateStartTime = now;
+        stateStartTime = millis();
+        if (!manualOverrideA) startDosing('A');
       } else if (phValue > (activeTargetPH + 0.5f)) {
         currentState = DOSING_PH_DOWN;
-        stateStartTime = now;
+        stateStartTime = millis();
+        if (!manualOverrideB) startDosing('B');
       } else {
         Serial.println("✅ pH is perfectly balanced");
         currentState = CHECK_EC;
@@ -663,28 +688,46 @@ void processPumpState() {
       break;
 
     case DOSING_PH_UP:
-      if (!manualOverrideA) startDosing('A');
       if (now - stateStartTime >= DOSING_TIME) {
         if (!manualOverrideA) stopDosing('A');
         sendLog("Dosed pH UP");
         currentState = WAIT_PH;
-        stateStartTime = now;
+        stateStartTime = millis();
       }
       break;
 
     case DOSING_PH_DOWN:
-      if (!manualOverrideB) startDosing('B');
       if (now - stateStartTime >= DOSING_TIME) {
         if (!manualOverrideB) stopDosing('B');
         sendLog("Dosed pH DOWN");
         currentState = WAIT_PH;
-        stateStartTime = now;
+        stateStartTime = millis();
       }
       break;
 
     case WAIT_PH:
       if (now - stateStartTime >= SENSOR_STABILIZATION_DELAY_MIN * 60000UL) {
+        currentState = WARMUP_PH;
+        stateStartTime = millis();
+        lastAutomationSensorRead = 0; // Force immediate read inside warmup
+      } else {
+        // Send lightweight heartbeat to keep device ONLINE without recording to history
+        if (now - lastAutomationSensorRead >= SENSOR_INTERVAL) {
+          lastAutomationSensorRead = now;
+          sendHeartbeat();
+        }
+      }
+      break;
+
+    case WARMUP_PH:
+      // Loop for 30 seconds, pinging sensors every 3 seconds to let probes settle
+      if (now - lastAutomationSensorRead >= 3000UL) {
+        readAndSendSensors();
+        lastAutomationSensorRead = now;
+      }
+      if (now - stateStartTime >= 30000UL) {
         currentState = CHECK_PH;
+        stateStartTime = millis();
       }
       break;
 
@@ -694,10 +737,12 @@ void processPumpState() {
         currentState = OPEN_ZONES;
       } else if (ecValue < (activeTargetEC - 0.5f)) {
         currentState = DOSING_EC_UP;
-        stateStartTime = now;
+        stateStartTime = millis();
+        if (!manualOverrideC) startDosing('C');
       } else if (ecValue > (activeTargetEC + 0.5f)) {
         currentState = DOSING_EC_DOWN;
-        stateStartTime = now;
+        stateStartTime = millis();
+        if (!manualOverrideD) startDosing('D');
       } else {
         Serial.println("✅ EC is perfectly balanced");
         currentState = OPEN_ZONES;
@@ -705,28 +750,46 @@ void processPumpState() {
       break;
 
     case DOSING_EC_UP:
-      if (!manualOverrideC) startDosing('C');
       if (now - stateStartTime >= DOSING_TIME) {
         if (!manualOverrideC) stopDosing('C');
         sendLog("Dosed EC UP");
         currentState = WAIT_EC;
-        stateStartTime = now;
+        stateStartTime = millis();
       }
       break;
 
     case DOSING_EC_DOWN:
-      if (!manualOverrideD) startDosing('D');
       if (now - stateStartTime >= DOSING_TIME) {
         if (!manualOverrideD) stopDosing('D');
         sendLog("Dosed EC DOWN");
         currentState = WAIT_EC;
-        stateStartTime = now;
+        stateStartTime = millis();
       }
       break;
 
     case WAIT_EC:
       if (now - stateStartTime >= SENSOR_STABILIZATION_DELAY_MIN * 60000UL) {
+        currentState = WARMUP_EC;
+        stateStartTime = millis();
+        lastAutomationSensorRead = 0; // Force immediate read inside warmup
+      } else {
+        // Send lightweight heartbeat to keep device ONLINE without recording to history
+        if (now - lastAutomationSensorRead >= SENSOR_INTERVAL) {
+          lastAutomationSensorRead = now;
+          sendHeartbeat();
+        }
+      }
+      break;
+
+    case WARMUP_EC:
+      // Loop for 30 seconds, pinging sensors every 3 seconds to let probes settle
+      if (now - lastAutomationSensorRead >= 3000UL) {
+        readAndSendSensors();
+        lastAutomationSensorRead = now;
+      }
+      if (now - stateStartTime >= 30000UL) {
         currentState = CHECK_EC;
+        stateStartTime = millis();
       }
       break;
 
@@ -735,13 +798,13 @@ void processPumpState() {
       if (activeZone2 && !manualOverrideZone2) digitalWrite(ZONE_2, LOW);
       if (activeZone3 && !manualOverrideZone3) digitalWrite(ZONE_3, LOW);
       currentState = WATER_PUMP;
-      stateStartTime = now;
+      stateStartTime = millis();
       break;
 
     case WATER_PUMP:
       if (!manualOverrideWater) startWaterPump();
       currentState = WATER_DELAY;
-      stateStartTime = now;
+      stateStartTime = millis();
       break;
 
     case WATER_DELAY:
@@ -760,7 +823,14 @@ void processPumpState() {
           
           sendLog("Watering finished, resting sensors for 4.5m");
           currentState = WAIT_END;
-          stateStartTime = now;
+          stateStartTime = millis();
+          lastAutomationSensorRead = now;
+        } else {
+          // Send lightweight heartbeat to keep device ONLINE without recording to history
+          if (now - lastAutomationSensorRead >= SENSOR_INTERVAL) {
+            lastAutomationSensorRead = now;
+            sendHeartbeat();
+          }
         }
       }
       break;
@@ -771,32 +841,69 @@ void processPumpState() {
         currentState    = IDLE;
         markScheduleExecuted(activeScheduleKey);
         Serial.printf("✅ Automation completely finished: %s\n", activeScheduleKey);
+      } else {
+        // Send lightweight heartbeat to keep device ONLINE without recording to history
+        if (now - lastAutomationSensorRead >= SENSOR_INTERVAL) {
+          lastAutomationSensorRead = now;
+          sendHeartbeat();
+        }
       }
       break;
   }
+}
+
+// ================= BOOT: RESET ALL FIREBASE PUMP STATES =================
+// After a crash/reboot, Firebase might still have pumps set to "ON" from
+// the previous session. Force everything to OFF so checkManualFromRTDB()
+// doesn't immediately turn all relays on.
+void resetAllPumpStatesInFirebase() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  Serial.println("🔄 Resetting all pump/valve states in Firebase to OFF...");
+
+  // Reset dosing pumps A, B, C, D
+  const char* pumpKeys[] = {"A", "B", "C", "D"};
+  for (int i = 0; i < 4; i++) {
+    String path = String(PATH_DOSING_PUMPS) + "/" + pumpKeys[i];
+    rtdbRequest("PATCH", path.c_str(), "{\"state\":\"OFF\",\"endTime\":0}");
+  }
+
+  // Reset main pump
+  rtdbRequest("PATCH", PATH_PUMP_CONTROL, "{\"state\":\"OFF\",\"endTime\":0}");
+
+  // Reset solenoid valves
+  const char* zoneKeys[] = {"zone1", "zone2", "zone3"};
+  for (int i = 0; i < 3; i++) {
+    String path = String(PATH_SOLENOID_VALVES) + "/" + zoneKeys[i];
+    rtdbRequest("PATCH", path.c_str(), "{\"state\":\"CLOSED\"}");
+  }
+
+  Serial.println("✅ All pump/valve states reset to OFF in Firebase.");
+  sendLog("Device booted - all pumps reset to OFF");
 }
 
 // ================= BACKGROUND TASK (CORE 0) =================
 void backgroundSensorTask(void *pvParameters) {
   for (;;) {
     if (WiFi.status() == WL_CONNECTED) {
-      if (millis() - lastSensorRead > SENSOR_INTERVAL) {
-        lastSensorRead = millis();
-        // ONLY read quality sensors if an automation schedule is NOT running
-        if (!schedulePending) {
+      // CRITICAL: When automation is running, STOP all background Firebase requests!
+      // Two cores making TLS connections simultaneously crashes the ESP32 (OOM).
+      // processPumpState() on Core 1 handles everything during automation.
+      if (!schedulePending) {
+        if (millis() - lastSensorRead > SENSOR_INTERVAL) {
+          lastSensorRead = millis();
           readAndSendSensors();
         }
-      }
-      
-      // ALWAYS check water level extremely fast (independently of 30-sec sensor interval)
-      readAndSendWaterLevel();
-      
-      if (millis() - lastScheduleCheck > SCHEDULE_INTERVAL) {
-        lastScheduleCheck = millis();
-        checkWaterSchedules();
+        
+        readAndSendWaterLevel();
+        
+        if (millis() - lastScheduleCheck > SCHEDULE_INTERVAL) {
+          lastScheduleCheck = millis();
+          checkWaterSchedules();
+        }
       }
     }
-    yield(); // yield to other processes
+    yield();
     delay(50);
   }
 }
@@ -806,6 +913,7 @@ void backgroundSensorTask(void *pvParameters) {
 // ─────────────────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
+  rtdbMutex = xSemaphoreCreateMutex();
 
   // Initialize and immediately turn OFF each relay sequentially to prevent massive inrush current (boot crashing)
   pinMode(TDS_POWER, OUTPUT);       digitalWrite(TDS_POWER, LOW);
@@ -824,6 +932,10 @@ void setup() {
 
   setupWiFi();    // WiFiManager — captive portal if no credentials saved
   setupTime();    // NTP sync
+
+  // CRITICAL: On boot, force ALL pump/valve states in Firebase to OFF.
+  // This prevents stale "ON" states from a previous crash turning pumps on.
+  resetAllPumpStatesInFirebase();
 
   // Spawn the background task for blocking sensor/HTTP reads
   xTaskCreatePinnedToCore(
@@ -859,7 +971,10 @@ void loop() {
   }
 
   // — Manual pump command poll —
-  if (millis() - lastPumpPoll > PUMP_POLL_INTERVAL) {
+  // CRITICAL: Skip manual polling when automation is running!
+  // Otherwise checkManualFromRTDB() reads Firebase (state=OFF) and 
+  // immediately turns off the relay that the automation just turned ON.
+  if (!schedulePending && millis() - lastPumpPoll > PUMP_POLL_INTERVAL) {
     lastPumpPoll = millis();
     checkManualFromRTDB();
   }

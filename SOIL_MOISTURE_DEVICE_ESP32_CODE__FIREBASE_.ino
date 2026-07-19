@@ -79,6 +79,10 @@ int rtdbPost(const char* path, const String& body) {
 
 // Logging helper — POST timestamped message to Firebase
 void sendLog(const String& message) {
+  static unsigned long lastLogTime = 0;
+  if (millis() - lastLogTime < 3000) return; // rate limit: max 1 log per 3 seconds
+  lastLogTime = millis();
+  
   struct tm t;
   if (!getLocalTime(&t)) return;    // skip if NTP not ready
   char timestamp[10];
@@ -244,10 +248,8 @@ void loop() {
 
       int soilCode = rtdbPut(PATH_SOIL_LATEST, body);
       Serial.printf("✅ soilData/latest PUT → %d\n", soilCode);
-      if (soilCode == 200) {
-        sendLog("Moisture:" + String(moisture,2) + " Temp:" + String(temperature,2)
-              + " pH:" + String(ph,2) + " EC:" + String(ec,2));
-        sendLog("Data pushed to Firebase OK");
+      if (soilCode != 200) {
+        sendLog("Soil data push failed (HTTP " + String(soilCode) + ")");
       }
     }
 
@@ -271,5 +273,5 @@ void loop() {
     WiFi.reconnect();
   }
 
-  delay(2000);   // same 2-second cycle as original
+  delay(10000);   // increased to 10-second cycle to avoid TLS exhaustion
 }
