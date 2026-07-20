@@ -9,14 +9,14 @@ const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false })
 
 function SensorCard({ icon, label, value, unit, sub }: { icon: string; label: string; value: string | number | null; unit: string; sub?: string }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-4">
-      <span className="text-3xl">{icon}</span>
-      <div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">{label}</p>
-        <p className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5">
+    <div className="bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-5 border border-gray-100 dark:border-gray-700 shadow-sm flex items-center gap-2 sm:gap-4 overflow-hidden">
+      <span className="text-2xl sm:text-3xl shrink-0">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium truncate">{label}</p>
+        <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white mt-0.5 truncate">
           {value !== null ? `${value} ${unit}` : <span className="text-gray-400 text-base">—</span>}
         </p>
-        {sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
+        {sub && <p className="text-[10px] sm:text-[11px] text-gray-400 mt-0.5 truncate">{sub}</p>}
       </div>
     </div>
   );
@@ -111,15 +111,15 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Welcome Card */}
-      <div className="bg-gradient-to-r from-brand-500 to-brand-600 rounded-xl p-6 shadow-lg text-white">
-        <div className="flex items-center justify-between">
+      <div className="bg-gradient-to-r from-brand-500 to-brand-600 rounded-xl p-5 sm:p-6 shadow-lg text-white">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}!</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}!</h1>
           </div>
-          <div className="text-right">
-            <p className="text-brand-100 text-sm">Current Date & Time</p>
-            <p className="text-xl font-semibold">{currentTime.toLocaleDateString()}</p>
-            <p className="text-lg">{currentTime.toLocaleTimeString()}</p>
+          <div className="text-left sm:text-right">
+            <p className="text-brand-100 text-xs sm:text-sm">Current Date & Time</p>
+            <p className="text-lg sm:text-xl font-semibold">{currentTime.toLocaleDateString()}</p>
+            <p className="text-base sm:text-lg">{currentTime.toLocaleTimeString()}</p>
           </div>
         </div>
       </div>
@@ -128,9 +128,9 @@ export default function DashboardPage() {
 
       {/* Water Quality */}
       <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3 flex flex-wrap items-center gap-2">
           💧 Water Quality Sensors
-          <span className="ml-2 text-xs font-normal normal-case text-gray-400">Last update: {fmt(latest?.createdAt)}</span>
+          <span className="text-[10px] sm:text-xs font-normal normal-case text-gray-400">Last update: {fmt(latest?.createdAt)}</span>
         </h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <SensorCard icon="🌡" label="Temperature" value={latest?.temperature ?? null} unit="°C" />
@@ -142,9 +142,9 @@ export default function DashboardPage() {
 
       {/* Soil Sensors */}
       <div>
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3 flex flex-wrap items-center gap-2">
           🌱 Soil Sensors
-          <span className="ml-2 text-xs font-normal normal-case text-gray-400">Last update: {fmt(soil?.updatedAt)}</span>
+          <span className="text-[10px] sm:text-xs font-normal normal-case text-gray-400">Last update: {fmt(soil?.updatedAt)}</span>
         </h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <SensorCard icon="💦" label="Moisture" value={soil?.moisture ?? null} unit="%" />

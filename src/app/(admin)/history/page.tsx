@@ -108,7 +108,7 @@ export default function HistoryPage() {
 
       {/* Date Range & Page Size */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <select
             value={pageSize}
             onChange={(e) => handlePageSizeChange(Number(e.target.value))}
@@ -190,11 +190,11 @@ export default function HistoryPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs">
               <tr>
-                <th className="px-5 py-3 text-left">Timestamp</th>
-                <th className="px-5 py-3 text-right">Temp (°C)</th>
-                <th className="px-5 py-3 text-right">TDS (ppm)</th>
-                <th className="px-5 py-3 text-right">EC (mS/cm)</th>
-                <th className="px-5 py-3 text-right">pH</th>
+                <th className="px-5 py-3 text-left whitespace-nowrap">Timestamp</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Temp (°C)</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">TDS (ppm)</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">EC (mS/cm)</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">pH</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -207,19 +207,19 @@ export default function HistoryPage() {
               ) : (
                 [...paginatedData].reverse().map((r) => (
                   <tr key={r.key} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                    <td className="px-5 py-3 font-medium text-gray-800 dark:text-white">
+                    <td className="px-5 py-3 font-medium text-gray-800 dark:text-white whitespace-nowrap">
                       {getReadingDate(r.value.createdAt).toLocaleString()}
                     </td>
-                    <td className="px-5 py-3 text-right text-gray-600 dark:text-gray-300">
+                    <td className="px-5 py-3 text-right text-gray-600 dark:text-gray-300 whitespace-nowrap">
                       {r.value.temperature?.toFixed(2) ?? "—"}
                     </td>
-                    <td className="px-5 py-3 text-right text-gray-600 dark:text-gray-300">
+                    <td className="px-5 py-3 text-right text-gray-600 dark:text-gray-300 whitespace-nowrap">
                       {r.value.tds?.toFixed(0) ?? "—"}
                     </td>
-                    <td className="px-5 py-3 text-right text-gray-600 dark:text-gray-300">
+                    <td className="px-5 py-3 text-right text-gray-600 dark:text-gray-300 whitespace-nowrap">
                       {r.value.ec?.toFixed(2) ?? "—"}
                     </td>
-                    <td className="px-5 py-3 text-right text-gray-600 dark:text-gray-300">
+                    <td className="px-5 py-3 text-right text-gray-600 dark:text-gray-300 whitespace-nowrap">
                       {r.value.ph?.toFixed(2) ?? "—"}
                     </td>
                   </tr>

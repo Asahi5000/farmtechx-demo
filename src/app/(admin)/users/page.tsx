@@ -113,13 +113,14 @@ export default function UsersPage() {
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
           <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs">
             <tr>
-              <th className="px-5 py-3 text-left">Name</th>
-              <th className="px-5 py-3 text-left">Email</th>
-              <th className="px-5 py-3 text-left">Role</th>
-              <th className="px-5 py-3 text-right">Action</th>
+              <th className="px-5 py-3 text-left whitespace-nowrap">Name</th>
+              <th className="px-5 py-3 text-left whitespace-nowrap">Email</th>
+              <th className="px-5 py-3 text-left whitespace-nowrap">Role</th>
+              <th className="px-5 py-3 text-right whitespace-nowrap">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -132,9 +133,9 @@ export default function UsersPage() {
             ) : (
               userList.map((u) => (
                 <tr key={u.uid} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                  <td className="px-5 py-3 font-medium text-gray-800 dark:text-white">{u.name}</td>
-                  <td className="px-5 py-3 text-gray-600 dark:text-gray-300">{u.email}</td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3 font-medium text-gray-800 dark:text-white whitespace-nowrap">{u.name}</td>
+                  <td className="px-5 py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">{u.email}</td>
+                  <td className="px-5 py-3 whitespace-nowrap">
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-semibold ${
                         u.role === "Admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
@@ -143,7 +144,7 @@ export default function UsersPage() {
                       {u.role}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-right">
+                  <td className="px-5 py-3 text-right whitespace-nowrap">
                     <button
                       onClick={() => openEditModal(u)}
                       className="text-blue-500 hover:text-blue-700 text-xs font-semibold px-3 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors mr-2"
@@ -162,6 +163,7 @@ export default function UsersPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Add User Modal */}

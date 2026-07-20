@@ -540,13 +540,14 @@ export default function IrrigationPage() {
 
         {/* Schedule Table */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 uppercase text-xs">
               <tr>
-                <th className="px-5 py-3 text-left">Time</th>
-                <th className="px-5 py-3 text-left">Duration</th>
-                <th className="px-5 py-3 text-left">Last Run</th>
-                <th className="px-5 py-3 text-right">Action</th>
+                <th className="px-5 py-3 text-left whitespace-nowrap">Time</th>
+                <th className="px-5 py-3 text-left whitespace-nowrap">Duration</th>
+                <th className="px-5 py-3 text-left whitespace-nowrap">Last Run</th>
+                <th className="px-5 py-3 text-right whitespace-nowrap">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -559,16 +560,16 @@ export default function IrrigationPage() {
               ) : (
                 sortedSchedules.map(([id, s]) => (
                   <tr key={id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                    <td className="px-5 py-3 font-medium text-gray-800 dark:text-white">
+                    <td className="px-5 py-3 font-medium text-gray-800 dark:text-white whitespace-nowrap">
                       {String(s.hour).padStart(2, "0")}:{String(s.minute).padStart(2, "0")} {s.ampm}
                     </td>
-                    <td className="px-5 py-3 text-gray-600 dark:text-gray-300">{s.duration} min</td>
-                    <td className="px-5 py-3 text-gray-500 dark:text-gray-400 text-xs">
+                    <td className="px-5 py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">{s.duration} min</td>
+                    <td className="px-5 py-3 text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">
                       {s.lastExecuted
                         ? new Date(s.lastExecuted).toLocaleString()
                         : <span className="text-gray-300 dark:text-gray-600">Never</span>}
                     </td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-5 py-3 text-right whitespace-nowrap">
                       <button
                         onClick={() => setDeleteTarget(id)}
                         className="text-red-500 hover:text-red-700 text-xs font-semibold px-3 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
@@ -581,6 +582,7 @@ export default function IrrigationPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </section>
 
