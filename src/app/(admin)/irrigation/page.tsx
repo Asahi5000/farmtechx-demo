@@ -35,10 +35,16 @@ const MOISTURE_THRESHOLD = 40; // %
 function useCountdown(endTime?: number): string {
   const [remaining, setRemaining] = useState("");
   useEffect(() => {
-    if (!endTime) return setRemaining("");
+    if (!endTime) {
+      const id = requestAnimationFrame(() => setRemaining(""));
+      return () => cancelAnimationFrame(id);
+    }
     const tick = () => {
       const diff = endTime - Date.now();
-      if (diff <= 0) return setRemaining("Done");
+      if (diff <= 0) {
+        setRemaining("Done");
+        return;
+      }
       const m = Math.floor(diff / 60000);
       const s = Math.floor((diff % 60000) / 1000);
       setRemaining(`${m}m ${s.toString().padStart(2, "0")}s`);

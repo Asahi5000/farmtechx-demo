@@ -9,7 +9,7 @@ export default function AboutPage() {
       {/* Company Header */}
       <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-gray-800 dark:to-gray-700 rounded-xl border border-green-100 dark:border-gray-600 shadow-sm p-8 text-center">
         <h3 className="text-3xl font-bold text-green-800 dark:text-green-400 mb-2">Baluzo Farm</h3>
-        <p className="text-lg italic text-green-700 dark:text-green-300">"Naturally Grown for Healthy Living"</p>
+        <p className="text-lg italic text-green-700 dark:text-green-300">&quot;Naturally Grown for Healthy Living&quot;</p>
       </div>
 
       {/* Company History */}

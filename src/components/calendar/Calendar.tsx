@@ -40,6 +40,7 @@ const Calendar: React.FC = () => {
 
   useEffect(() => {
     // Initialize with some events
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: initializing calendar with sample events on mount
     setEvents([
       {
         id: "1",
@@ -99,7 +100,7 @@ const Calendar: React.FC = () => {
     } else {
       // Add new event
       const newEvent: CalendarEvent = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         title: eventTitle,
         start: eventStartDate,
         end: eventEndDate,
