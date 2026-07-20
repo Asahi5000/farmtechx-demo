@@ -60,17 +60,17 @@ export default function SignInForm() {
       <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
         <div>
           {/* Logo */}
-          <div className="flex justify-center items-center gap-6 mb-8">
+          <div className="flex justify-center items-center gap-3 sm:gap-6 mb-8 px-4">
             <img
               src="/images/baluzo-farm-logo-nobg.png"
               alt="Baluzo Farm"
-              className="w-40 h-auto"
+              className="w-24 sm:w-40 h-auto object-contain"
             />
-            <span className="text-3xl text-gray-400 dark:text-gray-600">×</span>
+            <span className="text-xl sm:text-3xl text-gray-400 dark:text-gray-600">×</span>
             <img
               src="/images/farmtechx-logo-nobg.png"
               alt="FarmTechX"
-              className="w-40 h-auto"
+              className="w-24 sm:w-40 h-auto object-contain"
             />
           </div>
           
