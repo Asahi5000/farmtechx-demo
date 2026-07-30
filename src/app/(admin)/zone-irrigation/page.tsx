@@ -7,6 +7,7 @@ import type {
   SolenoidValve,
   SolenoidValves,
   ZoneSchedule,
+  PumpState,
 } from "@/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -297,6 +298,7 @@ export default function ZoneIrrigationPage() {
   const [loadingValve, setLoadingValve] = useState<Record<ZoneKey, boolean>>({
     zone1: false, zone2: false, zone3: false, zone4: false,
   });
+  const [mainPump, setMainPump] = useState<PumpState | null>(null);
 
   // ── Listeners ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -304,6 +306,7 @@ export default function ZoneIrrigationPage() {
       listenTo<SolenoidValves>(PATHS.SOLENOID_VALVES, setValves),
       listenTo<SoilData>(PATHS.SOIL_DATA, setSoil),
       listenTo<RainData>(PATHS.RAIN_DATA, setRain),
+      listenTo<PumpState>(PATHS.PUMP_CONTROL, setMainPump),
       listenTo<Record<ZoneKey, ZoneSchedule>>(PATHS.ZONE_SCHEDULES, (data) => {
         setZoneSchedules({
           zone1: data?.zone1 ?? null,
@@ -321,7 +324,8 @@ export default function ZoneIrrigationPage() {
     if (!valves) return;
     const moisture  = soil?.moisture  ?? 0;
     const isRaining = rain?.isRaining ?? false;
-    const shouldOpen = !isRaining && moisture < MOISTURE_THRESHOLD;
+    const isPumpRunning = mainPump?.state === "ON";
+    const shouldOpen = !isRaining && (isPumpRunning || moisture < MOISTURE_THRESHOLD);
 
     (["zone1", "zone2", "zone3", "zone4"] as ZoneKey[]).forEach((z) => {
       const v = valves[z];
@@ -329,7 +333,7 @@ export default function ZoneIrrigationPage() {
       const target = shouldOpen ? "OPEN" : "CLOSED";
       if (v.state !== target) setValveState(z, { state: target, mode: "AUTO" });
     });
-  }, [soil, rain, valves]);
+  }, [soil, rain, valves, mainPump]);
 
   const handleSetValve = async (zone: ZoneKey, valve: SolenoidValve) => {
     setLoadingValve((p) => ({ ...p, [zone]: true }));

@@ -345,19 +345,21 @@ void sendHeartbeat() {
 }
 
 // ================= CHECK SOIL/RAIN =================
-bool checkSoilRain() {
+bool checkSoilRain(bool ignoreMoisture = false) {
   if (WiFi.status() != WL_CONNECTED) return false;
 
   float moisture     = 0;
   int   rainIntensity = 0;
 
   // — soilData/latest —
-  String soilRaw = rtdbRequest("GET", PATH_SOIL_LATEST);
-  if (soilRaw.length() > 2) {
-    JsonDocument doc;
-    if (!deserializeJson(doc, soilRaw)) {
-      moisture = doc["moisture"] | 0.0f;
-      Serial.printf("🌱 Soil moisture: %.2f%%\n", moisture);
+  if (!ignoreMoisture) {
+    String soilRaw = rtdbRequest("GET", PATH_SOIL_LATEST);
+    if (soilRaw.length() > 2) {
+      JsonDocument doc;
+      if (!deserializeJson(doc, soilRaw)) {
+        moisture = doc["moisture"] | 0.0f;
+        Serial.printf("🌱 Soil moisture: %.2f%%\n", moisture);
+      }
     }
   }
 
@@ -372,9 +374,14 @@ bool checkSoilRain() {
   }
 
   // STOP irrigation if soil is wet (≥50%) OR rain is heavy (≥50%)
-  if (moisture >= 50.0f || rainIntensity >= 50) {
-    Serial.printf("⚠️ Irrigation blocked — Moisture:%.1f%% Rain:%d%%\n", moisture, rainIntensity);
-    sendLog("Irrigation blocked: Moisture=" + String(moisture,1) + "% Rain=" + String(rainIntensity) + "%");
+  if ((!ignoreMoisture && moisture >= 50.0f) || rainIntensity >= 50) {
+    if (!ignoreMoisture && moisture >= 50.0f) {
+      Serial.printf("⚠️ Irrigation blocked — Moisture:%.1f%%\n", moisture);
+      sendLog("Irrigation blocked: Moisture=" + String(moisture,1) + "%");
+    } else {
+      Serial.printf("⚠️ Irrigation blocked — Rain:%d%%\n", rainIntensity);
+      sendLog("Irrigation blocked: Rain=" + String(rainIntensity) + "%");
+    }
     return false;
   }
   return true;
@@ -657,8 +664,8 @@ void processPumpState() {
   static unsigned long lastMidRunCheck = 0;
   if (now - lastMidRunCheck > 60000UL) {
     lastMidRunCheck = now;
-    if (!checkSoilRain()) {
-    Serial.println("⚠️ Automation suspended mid-run (moisture/rain)");
+    if (!checkSoilRain(true)) {
+    Serial.println("⚠️ Automation suspended mid-run (rain)");
     stopDosing('A'); stopDosing('B'); stopDosing('C'); stopDosing('D'); stopWaterPump();
     digitalWrite(ZONE_1, HIGH); digitalWrite(ZONE_2, HIGH); digitalWrite(ZONE_3, HIGH);
     schedulePending = false;

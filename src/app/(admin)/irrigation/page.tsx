@@ -291,7 +291,8 @@ export default function IrrigationPage() {
     if (!valves) return;
     const moisture = soil?.moisture ?? 0;
     const isRaining = rain?.isRaining ?? false;
-    const shouldOpen = !isRaining && moisture < MOISTURE_THRESHOLD;
+    const isPumpRunning = mainPump?.state === "ON";
+    const shouldOpen = !isRaining && (isPumpRunning || moisture < MOISTURE_THRESHOLD);
 
     const zones: ZoneKey[] = ["zone1", "zone2", "zone3", "zone4"];
     zones.forEach((z) => {
@@ -302,7 +303,7 @@ export default function IrrigationPage() {
         setValveState(z, { state: targetState, mode: "AUTO" });
       }
     });
-  }, [soil, rain, valves]);
+  }, [soil, rain, valves, mainPump?.state]);
 
   // ── Mode switch ─────────────────────────────────────────────────────────────
   const handleModeSwitch = async (newMode: Mode) => {

@@ -163,7 +163,7 @@ export default function AboutPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="flex flex-col items-center text-center">
             <img
-              src="/images/developers/obias.jpg"
+              src="/images/developers/owen_obias.jpg"
               alt="Obias, John Owen A."
               className="w-32 h-32 rounded-full object-cover mb-4 border-4 border-brand-500"
             />
@@ -173,7 +173,7 @@ export default function AboutPage() {
           </div>
           <div className="flex flex-col items-center text-center">
             <img
-              src="/images/developers/avendano.jpg"
+              src="/images/developers/patrick_avendano.jpg"
               alt="Avendaño, John Patrick B."
               className="w-32 h-32 rounded-full object-cover mb-4 border-4 border-brand-500"
             />
@@ -183,7 +183,7 @@ export default function AboutPage() {
           </div>
           <div className="flex flex-col items-center text-center">
             <img
-              src="/images/developers/maigue.jpg"
+              src="/images/developers/merck_maigue.jpg"
               alt="Maigue, Merck San V."
               className="w-32 h-32 rounded-full object-cover mb-4 border-4 border-brand-500"
             />
