@@ -2,15 +2,13 @@
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { updateProfile } from "firebase/auth";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@/config/firebase";
+import { requireSupabaseConfig, supabase } from "@/config/supabase";
 
 export default function ProfilePage() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, updateProfile } = useAuth();
   const { showToast } = useToast();
   
-  const [displayName, setDisplayName] = useState(user?.displayName || "");
+  const [displayName, setDisplayName] = useState(user?.user_metadata?.display_name || "");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imageKey, setImageKey] = useState(Date.now());
@@ -32,20 +30,22 @@ export default function ProfilePage() {
     setUploading(true);
     try {
       const timestamp = Date.now();
-      const storageRef = ref(storage, `profile-images/${user.uid}_${timestamp}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const photoURL = await getDownloadURL(snapshot.ref);
-      // Add cache-busting parameter
-      const photoURLWithCache = `${photoURL}?t=${timestamp}`;
-      await updateProfile(user, { photoURL: photoURLWithCache });
+      requireSupabaseConfig();
+      const objectPath = `${user.id}/${timestamp}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(objectPath, file, { upsert: true, contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from("avatars").getPublicUrl(objectPath);
+      await updateProfile(displayName.trim() || user.user_metadata?.display_name || "", data.publicUrl);
       await refreshUser();
-      setImageKey(timestamp); // Force image re-render
+      setImageKey(timestamp);
       showToast("Profile image updated successfully.", "success");
       // Reset file input
       e.target.value = '';
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error uploading image:", error);
-      showToast(error.message || "Failed to upload image.", "error");
+      showToast(error instanceof Error ? error.message : "Failed to upload image.", "error");
     } finally {
       setUploading(false);
     }
@@ -62,12 +62,17 @@ export default function ProfilePage() {
 
     setSaving(true);
     try {
-      await updateProfile(user, { displayName: displayName.trim() });
-      refreshUser();
+      requireSupabaseConfig();
+      await updateProfile(displayName.trim());
+      const { error } = await supabase
+        .from("profiles")
+        .update({ name: displayName.trim() })
+        .eq("id", user.id);
+      if (error) throw error;
       showToast("Profile updated successfully.", "success");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating profile:", error);
-      showToast(error.message || "Failed to update profile.", "error");
+      showToast(error instanceof Error ? error.message : "Failed to update profile.", "error");
     } finally {
       setSaving(false);
     }
@@ -94,16 +99,16 @@ export default function ProfilePage() {
               disabled={uploading}
               className="hidden"
             />
-            {user?.photoURL ? (
+            {user?.user_metadata?.avatar_url ? (
               <img
                 key={imageKey}
-                src={user.photoURL}
+                src={user.user_metadata.avatar_url}
                 alt="Profile"
                 className={`w-24 h-24 rounded-full object-cover border-4 border-brand-500 transition-opacity ${uploading ? 'opacity-50' : 'group-hover:opacity-75'}`}
               />
             ) : (
               <div className={`w-24 h-24 bg-gradient-to-br from-brand-400 to-brand-600 rounded-full flex items-center justify-center text-white text-3xl font-bold border-4 border-brand-500 transition-opacity ${uploading ? 'opacity-50' : 'group-hover:opacity-75'}`}>
-                {user?.displayName?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U"}
+                {user?.user_metadata?.display_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U"}
               </div>
             )}
             {/* Hover/Loading Overlay */}
@@ -165,22 +170,22 @@ export default function ProfilePage() {
           <div>
             <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Account UID</p>
             <p className="text-sm font-mono text-gray-800 dark:text-white break-all">
-              {user?.uid || "—"}
+              {user?.id || "—"}
             </p>
           </div>
           <div>
             <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Account Created</p>
             <p className="text-sm font-medium text-gray-800 dark:text-white">
-              {user?.metadata?.creationTime
-                ? new Date(user.metadata.creationTime).toLocaleString()
+              {user?.created_at
+                ? new Date(user.created_at).toLocaleString()
                 : "—"}
             </p>
           </div>
           <div>
             <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">Last Sign In</p>
             <p className="text-sm font-medium text-gray-800 dark:text-white">
-              {user?.metadata?.lastSignInTime
-                ? new Date(user.metadata.lastSignInTime).toLocaleString()
+              {user?.last_sign_in_at
+                ? new Date(user.last_sign_in_at).toLocaleString()
                 : "—"}
             </p>
           </div>

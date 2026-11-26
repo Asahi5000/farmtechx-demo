@@ -120,10 +120,10 @@ export default function AboutPage() {
             </div>
           </div>
           <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-            <span className="text-2xl">🔥</span>
+            <span className="text-2xl">🗄️</span>
             <div>
-              <p className="font-semibold text-gray-900 dark:text-white text-sm">Firebase</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Realtime Database & Auth</p>
+              <p className="font-semibold text-gray-900 dark:text-white text-sm">Supabase</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Postgres, Realtime, Auth & Storage</p>
             </div>
           </div>
           <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">

@@ -204,7 +204,7 @@ function ZoneScheduleRow({
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
 
-  // Sync from RTDB when parent data changes
+  // Sync from Supabase Realtime when parent data changes
   useEffect(() => {
     if (!schedule) return;
     setHour(schedule.hour);

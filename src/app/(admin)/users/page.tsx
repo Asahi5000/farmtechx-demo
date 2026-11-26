@@ -1,9 +1,27 @@
 "use client";
-import React, { useEffect, useState } from "react";
-import { createUserWithEmailAndPassword, deleteUser as firebaseDeleteUser } from "firebase/auth";
-import { ref, set, onValue, remove, off } from "firebase/database";
-import { auth, db } from "@/config/firebase";
+import React, { useCallback, useEffect, useState } from "react";
+import { requireSupabaseConfig, supabase } from "@/config/supabase";
 import type { UserRecord } from "@/types";
+
+async function adminUsersRequest<T>(method: string, body?: unknown): Promise<T> {
+  requireSupabaseConfig();
+  const { data, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  const accessToken = data.session?.access_token;
+  if (!accessToken) throw new Error("Please sign in again to manage users.");
+
+  const response = await fetch("/api/admin/users", {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "User request failed.");
+  return result as T;
+}
 
 export default function UsersPage() {
   const [users, setUsers] = useState<Record<string, UserRecord>>({});
@@ -24,32 +42,37 @@ export default function UsersPage() {
   const [editRole, setEditRole] = useState<"Admin" | "Staff">("Staff");
   const [editPassword, setEditPassword] = useState("");
 
-  useEffect(() => {
-    const r = ref(db, "farmtechx/users");
-    onValue(r, (snap) => setUsers(snap.exists() ? snap.val() : {}));
-    return () => off(r);
+  const loadUsers = useCallback(async () => {
+    try {
+      const result = await adminUsersRequest<{ users: UserRecord[] }>("GET");
+      setUsers(Object.fromEntries(result.users.map((user) => [user.uid, user])));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to load users.");
+    }
   }, []);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
-      await set(ref(db, `farmtechx/users/${uid}`), {
-        uid,
+      await adminUsersRequest("POST", {
         name,
         email,
+        password,
         role,
-        createdAt: Date.now(),
       });
+      await loadUsers();
       setShowModal(false);
       setName("");
       setEmail("");
       setPassword("");
       setRole("Staff");
-    } catch (err: any) {
-      alert(err.message);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to create user.");
     } finally {
       setLoading(false);
     }
@@ -58,10 +81,11 @@ export default function UsersPage() {
   const handleDeleteUser = async () => {
     if (!deleteTarget) return;
     try {
-      await remove(ref(db, `farmtechx/users/${deleteTarget}`));
+      await adminUsersRequest("DELETE", { uid: deleteTarget });
       setDeleteTarget(null);
-    } catch (err: any) {
-      alert(err.message);
+      await loadUsers();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to delete user.");
     }
   };
 
@@ -70,21 +94,20 @@ export default function UsersPage() {
     if (!editTarget) return;
     setLoading(true);
     try {
-      const updates: any = {
+      await adminUsersRequest("PATCH", {
+        uid: editTarget.uid,
         name: editName,
         role: editRole,
-      };
-      await set(ref(db, `farmtechx/users/${editTarget.uid}`), {
-        ...editTarget,
-        ...updates,
+        ...(editPassword ? { password: editPassword } : {}),
       });
+      await loadUsers();
       setShowEditModal(false);
       setEditTarget(null);
       setEditName("");
       setEditRole("Staff");
       setEditPassword("");
-    } catch (err: any) {
-      alert(err.message);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to update user.");
     } finally {
       setLoading(false);
     }

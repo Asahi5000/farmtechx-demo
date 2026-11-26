@@ -1,5 +1,4 @@
 "use client";
-import Checkbox from "@/components/form/input/Checkbox";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
@@ -8,13 +7,10 @@ import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useRouter } from "next/navigation";
-import { setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
-import { auth } from "@/config/firebase";
-import Image from "next/image";
+import { isSupabaseConfigured } from "@/config/supabase";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
-  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,24 +24,22 @@ export default function SignInForm() {
     setLoading(true);
 
     try {
-      // Set persistence based on "Keep me logged in" checkbox
-      await setPersistence(auth, keepLoggedIn ? browserLocalPersistence : browserSessionPersistence);
-      
       await signIn(email, password);
       showToast("Successfully signed in!", "success");
       router.push("/");
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const code = typeof err === "object" && err !== null && "code" in err ? err.code : "";
       let errorMessage = "Invalid email or password";
-      if (err.code === "auth/user-not-found") {
-        errorMessage = "No account found with this email";
-      } else if (err.code === "auth/wrong-password") {
-        errorMessage = "Incorrect password";
-      } else if (err.code === "auth/invalid-credential") {
+      if (code === "invalid_credentials") {
         errorMessage = "Invalid email or password. Please check your credentials.";
-      } else if (err.code === "auth/invalid-email") {
+      } else if (code === "email_not_confirmed") {
+        errorMessage = "Confirm your email address before signing in.";
+      } else if (code === "invalid_email") {
         errorMessage = "Invalid email format";
-      } else if (err.code === "auth/too-many-requests") {
+      } else if (code === "too_many_requests") {
         errorMessage = "Too many failed attempts. Please try again later";
+      } else if (err instanceof Error) {
+        errorMessage = err.message;
       }
       showToast(errorMessage, "error");
     } finally {
@@ -83,6 +77,11 @@ export default function SignInForm() {
             </p>
           </div>
           <div>
+            {!isSupabaseConfigured && (
+              <p className="mb-4 rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800">
+                Supabase setup is required. Add the project URL and anon key to your environment file.
+              </p>
+            )}
             <form onSubmit={handleSubmit}>
               <div className="space-y-6">
                 <div>
@@ -121,14 +120,8 @@ export default function SignInForm() {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Checkbox checked={keepLoggedIn} onChange={setKeepLoggedIn} />
-                  <span className="block font-normal text-gray-700 text-theme-sm dark:text-gray-400">
-                    Keep me logged in
-                  </span>
-                </div>
                 <div>
-                  <Button className="w-full" size="sm" disabled={loading}>
+                  <Button className="w-full" size="sm" disabled={loading || !isSupabaseConfigured}>
                     {loading ? "Signing in..." : "Sign in"}
                   </Button>
                 </div>

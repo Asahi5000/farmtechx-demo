@@ -9,14 +9,14 @@
 #include <ArduinoJson.h>
 #include <time.h>
 
-// ================= FIREBASE CONFIG =================
+// ================= SUPABASE CONFIG =================
 // Replace with your own values:
-// RTDB_HOST  → Firebase Console → Realtime Database → Data tab URL (no https://, no trailing slash)
-// RTDB_SECRET → Firebase Console → Project Settings → Service Accounts → Database secrets
-#define RTDB_HOST   "farmtechx-3accc-default-rtdb.asia-southeast1.firebasedatabase.app"
-#define RTDB_SECRET "9RFNs6PmAThgHXohje0RrR5i6EMEvwjhaR6BHhOs"
+// Configure the Supabase project URL, anon key, and private device token below.
+#define SUPABASE_FUNCTION_URL "https://YOUR_PROJECT_REF.supabase.co/functions/v1/farm-device"
+#define SUPABASE_ANON_KEY "YOUR_SUPABASE_ANON_KEY"
+#define FARM_DEVICE_TOKEN "YOUR_DEVICE_TOKEN"
 
-// RTDB paths — must match realtimeService.ts PATHS
+// Supabase paths — must match realtimeService.ts PATHS
 #define PATH_SOIL_LATEST "/farmtechx/soilData/latest"
 #define PATH_RAIN_LATEST "/farmtechx/rainData/latest"
 #define PATH_LOG_SOIL    "/farmtechx/logs/soilDevice"
@@ -46,38 +46,34 @@ int  rainIntensity = 0;
 // ================= SENSOR ID =================
 #define SENSOR_ID 2
 
-// HTTPS helper — PUT a JSON body to a RTDB path
-int rtdbPut(const char* path, const String& body) {
+int farmDeviceRequest(const char* method, const char* path, const String& body) {
   WiFiClientSecure client;
-  client.setInsecure();   // skip cert verify (OK for dev; load CA for production)
+  client.setInsecure();   // Use the Supabase certificate authority in production.
 
   HTTPClient http;
-  String url = String("https://") + RTDB_HOST + path
-             + ".json?auth=" + RTDB_SECRET;
-  http.begin(client, url);
+  http.begin(client, SUPABASE_FUNCTION_URL);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("apikey", SUPABASE_ANON_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+  http.addHeader("x-device-token", FARM_DEVICE_TOKEN);
   http.setTimeout(8000);
-  int code = http.PUT(body);
+
+  String requestBody = String("{\"method\":\"") + method
+                     + "\",\"path\":\"" + path + "\",\"value\":" + body + "}";
+  int code = http.POST(requestBody);
   http.end();
   return code;
 }
 
-// HTTPS POST helper (for log entries)
-int rtdbPost(const char* path, const String& body) {
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-  String url = String("https://") + RTDB_HOST + path
-             + ".json?auth=" + RTDB_SECRET;
-  http.begin(client, url);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(8000);
-  int code = http.POST(body);
-  http.end();
-  return code;
+int supabasePut(const char* path, const String& body) {
+  return farmDeviceRequest("PUT", path, body);
 }
 
-// Logging helper — POST timestamped message to Firebase
+int supabasePost(const char* path, const String& body) {
+  return farmDeviceRequest("POST", path, body);
+}
+
+// Logging helper — POST timestamped message to Supabase
 void sendLog(const String& message) {
   static unsigned long lastLogTime = 0;
   if (millis() - lastLogTime < 3000) return; // rate limit: max 1 log per 3 seconds
@@ -92,7 +88,7 @@ void sendLog(const String& message) {
   doc["message"]   = message;
   String body;
   serializeJson(doc, body);
-  rtdbPost(PATH_LOG_SOIL, body);
+  supabasePost(PATH_LOG_SOIL, body);
 }
 
 // WiFi + WiFiManager setup
@@ -187,7 +183,7 @@ void setup() {
   setupWiFi();    // WiFiManager captive portal
   setupTime();    // NTP sync
 
-  Serial.println("🌱 ESP32 Soil + Rain Sensor Started (Firebase mode)");
+  Serial.println("🌱 ESP32 Soil + Rain Sensor Started (Supabase mode)");
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -246,7 +242,7 @@ void loop() {
       String body;
       serializeJson(doc, body);
 
-      int soilCode = rtdbPut(PATH_SOIL_LATEST, body);
+      int soilCode = supabasePut(PATH_SOIL_LATEST, body);
       Serial.printf("✅ soilData/latest PUT → %d\n", soilCode);
       if (soilCode != 200) {
         sendLog("Soil data push failed (HTTP " + String(soilCode) + ")");
@@ -262,7 +258,7 @@ void loop() {
       String body;
       serializeJson(doc, body);
 
-      int rainCode = rtdbPut(PATH_RAIN_LATEST, body);
+      int rainCode = supabasePut(PATH_RAIN_LATEST, body);
       Serial.printf("🌧 rainData/latest PUT → %d\n", rainCode);
     }
 

@@ -273,7 +273,7 @@ export default function IrrigationPage() {
   const [schDuration, setSchDuration] = useState(5);
   const [schLoading, setSchLoading] = useState(false);
 
-  // ── RTDB listeners ──────────────────────────────────────────────────────────
+  // ── Supabase Realtime listeners ─────────────────────────────────────────────
   useEffect(() => {
     const unsubs = [
       listenTo<PumpState>(PATHS.PUMP_CONTROL, setMainPump),

@@ -1,6 +1,6 @@
 // ============================================================
 //  FarmTechX — WATER LEVEL & DOSING CONTROL DEVICE
-//  Using Firebase Realtime Database (REST API)
+//  Using Supabase Realtime Database (REST API)
 // ============================================================
 
 #include <WiFi.h>
@@ -30,11 +30,12 @@
 #define LEVEL_HIGH   32
 #define LEVEL_LOW    33
 
-// ================= FIREBASE CONFIG =================
-#define RTDB_HOST   "farmtechx-3accc-default-rtdb.asia-southeast1.firebasedatabase.app"
-#define RTDB_SECRET "9RFNs6PmAThgHXohje0RrR5i6EMEvwjhaR6BHhOs"
+// ================= SUPABASE CONFIG =================
+#define SUPABASE_FUNCTION_URL "https://YOUR_PROJECT_REF.supabase.co/functions/v1/farm-device"
+#define SUPABASE_ANON_KEY "YOUR_SUPABASE_ANON_KEY"
+#define FARM_DEVICE_TOKEN "YOUR_DEVICE_TOKEN"
 
-// RTDB paths (must match realtimeService.ts PATHS)
+// Supabase paths (must match realtimeService.ts PATHS)
 #define PATH_SENSORS_WATER  "/farmtechx/sensors/water"
 #define PATH_SOIL_LATEST    "/farmtechx/soilData/latest"
 #define PATH_RAIN_LATEST    "/farmtechx/rainData/latest"
@@ -85,7 +86,7 @@ unsigned long stateStartTime = 0;
 bool schedulePending    = false;
 bool executedFlag       = false;
 
-// Stores the RTDB push key of the running schedule (e.g. "-NxABC123")
+// Stores the Supabase push key of the running schedule (e.g. "-NxABC123")
 char activeScheduleKey[40] = "";
 int  activeScheduleDuration = 0;     // minutes
 int  activeScheduleDurationSec = 0;  // seconds
@@ -119,52 +120,51 @@ unsigned long lastScheduleCheck = 0;
 unsigned long lastPumpPoll     = 0;
 unsigned long lastAutomationSensorRead = 0;
 
-// ================= FIREBASE HTTPS REQUEST =================
-SemaphoreHandle_t rtdbMutex = NULL;
+// ================= SUPABASE EDGE FUNCTION REQUEST =================
+SemaphoreHandle_t supabaseMutex = NULL;
 
-String rtdbRequest(const char* method, const char* path,
+String supabaseRequest(const char* method, const char* path,
                    const String& body = "",
                    int* httpCode_out = nullptr) {
-  if (rtdbMutex) xSemaphoreTake(rtdbMutex, portMAX_DELAY);
+  if (supabaseMutex) xSemaphoreTake(supabaseMutex, portMAX_DELAY);
   
   WiFiClientSecure client;
-  client.setInsecure();   // skip cert verify (OK for embedded; use CA for prod)
+  client.setInsecure();   // Use the Supabase certificate authority in production.
 
   HTTPClient http;
-  String url = String("https://") + RTDB_HOST + path
-             + ".json?auth=" + RTDB_SECRET;
-  http.begin(client, url);
+  http.begin(client, SUPABASE_FUNCTION_URL);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("apikey", SUPABASE_ANON_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+  http.addHeader("x-device-token", FARM_DEVICE_TOKEN);
   http.setTimeout(8000);
+
+  String requestBody = String("{\"method\":\"") + method
+                     + "\",\"path\":\"" + path + "\"";
+  if (strcmp(method, "GET") != 0 && body.length() > 0) {
+    requestBody += ",\"value\":" + body;
+  }
+  requestBody += "}";
 
   int code = -1;
   String response = "";
-
-  if (strcmp(method, "GET") == 0) {
-    code = http.GET();
-  } else if (strcmp(method, "PUT") == 0) {
-    code = http.PUT(body);
-  } else if (strcmp(method, "POST") == 0) {
-    code = http.POST(body);
-  } else if (strcmp(method, "PATCH") == 0) {
-    code = http.PATCH(body);
-  }
+  code = http.POST(requestBody);
 
   if (code == 200) {
     response = http.getString();
   } else {
-    Serial.printf("❌ RTDB %s %s → HTTP %d\n", method, path, code);
+    Serial.printf("❌ Supabase %s %s → HTTP %d\n", method, path, code);
     if (code > 0) Serial.println("Response: " + http.getString());
   }
 
   if (httpCode_out) *httpCode_out = code;
   http.end();
   
-  if (rtdbMutex) xSemaphoreGive(rtdbMutex);
+  if (supabaseMutex) xSemaphoreGive(supabaseMutex);
   return response;
 }
 
-// ================= LOGGING TO FIREBASE =================
+// ================= DEVICE LOGGING =================
 void sendLog(const String& message) {
   static unsigned long lastLogTime = 0;
   if (millis() - lastLogTime < 3000) return; // rate limit: max 1 log per 3 seconds
@@ -185,7 +185,7 @@ void sendLog(const String& message) {
   serializeJson(doc, body);
   
   int code;
-  rtdbRequest("POST", PATH_LOG_WATER, body, &code);
+  supabaseRequest("POST", PATH_LOG_WATER, body, &code);
   Serial.printf("   sendLog POST → %d\n", code);
 }
 
@@ -247,7 +247,7 @@ void readAndSendWaterLevel() {
   waterHigh = highTriggered;
   waterLow  = lowTriggered;
 
-  // Send to Firebase INSTANTLY on change, OR every 20 seconds as heartbeat
+  // Send to Supabase INSTANTLY on change, OR every 20 seconds as heartbeat
   if (!stateChanged && (millis() - lastWaterLevelSend < 20000)) return;
 
   lastWaterLevelSend = millis();
@@ -274,7 +274,7 @@ void readAndSendWaterLevel() {
     String body;
     serializeJson(doc, body);
     int code;
-    rtdbRequest("PUT", PATH_WATER_LEVEL, body, &code);
+    supabaseRequest("PUT", PATH_WATER_LEVEL, body, &code);
     Serial.printf("   waterLevel PUT → %d\n", code);
     if (stateChanged) sendLog("Water level: " + status);
   }
@@ -332,7 +332,7 @@ void readAndSendSensors() {
     String body;
     serializeJson(doc, body);
     int code;
-    rtdbRequest("POST", PATH_SENSORS_WATER, body, &code);
+    supabaseRequest("POST", PATH_SENSORS_WATER, body, &code);
     Serial.printf("   sensors/water POST → %d\n", code);
   }
 }
@@ -345,24 +345,26 @@ void sendHeartbeat() {
 }
 
 // ================= CHECK SOIL/RAIN =================
-bool checkSoilRain() {
+bool checkSoilRain(bool ignoreMoisture = false) {
   if (WiFi.status() != WL_CONNECTED) return false;
 
   float moisture     = 0;
   int   rainIntensity = 0;
 
   // — soilData/latest —
-  String soilRaw = rtdbRequest("GET", PATH_SOIL_LATEST);
-  if (soilRaw.length() > 2) {
-    JsonDocument doc;
-    if (!deserializeJson(doc, soilRaw)) {
-      moisture = doc["moisture"] | 0.0f;
-      Serial.printf("🌱 Soil moisture: %.2f%%\n", moisture);
+  if (!ignoreMoisture) {
+    String soilRaw = supabaseRequest("GET", PATH_SOIL_LATEST);
+    if (soilRaw.length() > 2) {
+      JsonDocument doc;
+      if (!deserializeJson(doc, soilRaw)) {
+        moisture = doc["moisture"] | 0.0f;
+        Serial.printf("🌱 Soil moisture: %.2f%%\n", moisture);
+      }
     }
   }
 
   // — rainData/latest —
-  String rainRaw = rtdbRequest("GET", PATH_RAIN_LATEST);
+  String rainRaw = supabaseRequest("GET", PATH_RAIN_LATEST);
   if (rainRaw.length() > 2) {
     JsonDocument doc;
     if (!deserializeJson(doc, rainRaw)) {
@@ -372,9 +374,14 @@ bool checkSoilRain() {
   }
 
   // STOP irrigation if soil is wet (≥50%) OR rain is heavy (≥50%)
-  if (moisture >= 50.0f || rainIntensity >= 50) {
-    Serial.printf("⚠️ Irrigation blocked — Moisture:%.1f%% Rain:%d%%\n", moisture, rainIntensity);
-    sendLog("Irrigation blocked: Moisture=" + String(moisture,1) + "% Rain=" + String(rainIntensity) + "%");
+  if ((!ignoreMoisture && moisture >= 50.0f) || rainIntensity >= 50) {
+    if (!ignoreMoisture && moisture >= 50.0f) {
+      Serial.printf("⚠️ Irrigation blocked — Moisture:%.1f%%\n", moisture);
+      sendLog("Irrigation blocked: Moisture=" + String(moisture,1) + "%");
+    } else {
+      Serial.printf("⚠️ Irrigation blocked — Rain:%d%%\n", rainIntensity);
+      sendLog("Irrigation blocked: Rain=" + String(rainIntensity) + "%");
+    }
     return false;
   }
   return true;
@@ -398,7 +405,7 @@ void markScheduleExecuted(const char* key) {
   while (!success && millis() - start < 30000UL) {
     if (WiFi.status() != WL_CONNECTED) { delay(1000); continue; }
     int code;
-    rtdbRequest("PUT", path.c_str(), body, &code);
+    supabaseRequest("PUT", path.c_str(), body, &code);
     if (code == 200) {
       success = true;
       executedFlag = true;
@@ -412,12 +419,12 @@ void markScheduleExecuted(const char* key) {
 }
 
 // ================= DASHBOARD MANUAL SYNC =================
-void checkManualFromRTDB() {
+void checkManualFromSupabase() {
   if (WiFi.status() != WL_CONNECTED) return;
   uint64_t nowMs = (uint64_t)time(nullptr) * 1000ULL;
 
   // — solenoid valves —
-  String svRaw = rtdbRequest("GET", PATH_SOLENOID_VALVES);
+  String svRaw = supabaseRequest("GET", PATH_SOLENOID_VALVES);
   if (svRaw.length() > 2) {
     JsonDocument doc;
     if (!deserializeJson(doc, svRaw)) {
@@ -438,7 +445,7 @@ void checkManualFromRTDB() {
   }
 
   // — dosing pumps A / B / C / D —
-  String dpRaw = rtdbRequest("GET", PATH_DOSING_PUMPS);
+  String dpRaw = supabaseRequest("GET", PATH_DOSING_PUMPS);
   if (dpRaw.length() > 2) {
     JsonDocument doc;
     if (!deserializeJson(doc, dpRaw)) {
@@ -456,7 +463,7 @@ void checkManualFromRTDB() {
             String body;
             serializeJson(offDoc, body);
             String pumpPath = String(PATH_DOSING_PUMPS) + "/" + key;
-            rtdbRequest("PATCH", pumpPath.c_str(), body);
+            supabaseRequest("PATCH", pumpPath.c_str(), body);
             sendLog(String("Dosing pump ") + pumpletter + " auto-OFF (timeout)");
           }
 
@@ -480,7 +487,7 @@ void checkManualFromRTDB() {
   }
 
   // — main pump —
-  String pmRaw = rtdbRequest("GET", PATH_PUMP_CONTROL);
+  String pmRaw = supabaseRequest("GET", PATH_PUMP_CONTROL);
   if (pmRaw.length() > 2) {
     JsonDocument doc;
     if (!deserializeJson(doc, pmRaw)) {
@@ -495,7 +502,7 @@ void checkManualFromRTDB() {
         offDoc["endTime"] = 0;
         String body;
         serializeJson(offDoc, body);
-        rtdbRequest("PATCH", PATH_PUMP_CONTROL, body);
+        supabaseRequest("PATCH", PATH_PUMP_CONTROL, body);
         sendLog("Main pump auto-OFF (timeout)");
       }
 
@@ -509,7 +516,7 @@ void checkManualFromRTDB() {
   }
 }
 
-// ================= CHECK FIREBASE SCHEDULE =================
+// ================= CHECK SUPABASE SCHEDULE =================
 void checkWaterSchedules() {
   if (WiFi.status() != WL_CONNECTED) return;
   if (schedulePending) return;  // Don't check for new schedules while one is already running
@@ -519,10 +526,10 @@ void checkWaterSchedules() {
   // Convert current time to minutes since midnight (24-h)
   int nowMin = t.tm_hour * 60 + t.tm_min;
 
-  String raw = rtdbRequest("GET", PATH_SCHEDULES);
+  String raw = supabaseRequest("GET", PATH_SCHEDULES);
   if (raw.length() < 3 || raw == "null") return;
 
-  // RTDB returns: { "-NxKey1": {hour,minute,ampm,duration}, ... }
+  // Supabase returns: { "-NxKey1": {hour,minute,ampm,duration}, ... }
   JsonDocument doc;
   if (deserializeJson(doc, raw)) return;
 
@@ -653,12 +660,12 @@ void processPumpState() {
 
   uint32_t now = millis();
 
-  // Mid-run soil/rain check (rate limited to once per minute to avoid Firebase HTTP spam!)
+  // Mid-run soil/rain check (rate limited to once per minute to avoid Supabase HTTP spam!)
   static unsigned long lastMidRunCheck = 0;
   if (now - lastMidRunCheck > 60000UL) {
     lastMidRunCheck = now;
-    if (!checkSoilRain()) {
-    Serial.println("⚠️ Automation suspended mid-run (moisture/rain)");
+    if (!checkSoilRain(true)) {
+    Serial.println("⚠️ Automation suspended mid-run (rain)");
     stopDosing('A'); stopDosing('B'); stopDosing('C'); stopDosing('D'); stopWaterPump();
     digitalWrite(ZONE_1, HIGH); digitalWrite(ZONE_2, HIGH); digitalWrite(ZONE_3, HIGH);
     schedulePending = false;
@@ -852,33 +859,33 @@ void processPumpState() {
   }
 }
 
-// ================= BOOT: RESET ALL FIREBASE PUMP STATES =================
-// After a crash/reboot, Firebase might still have pumps set to "ON" from
-// the previous session. Force everything to OFF so checkManualFromRTDB()
+// ================= BOOT: RESET ALL SUPABASE PUMP STATES =================
+// After a crash/reboot, Supabase might still have pumps set to "ON" from
+// the previous session. Force everything to OFF so checkManualFromSupabase()
 // doesn't immediately turn all relays on.
-void resetAllPumpStatesInFirebase() {
+void resetAllPumpStatesInSupabase() {
   if (WiFi.status() != WL_CONNECTED) return;
 
-  Serial.println("🔄 Resetting all pump/valve states in Firebase to OFF...");
+  Serial.println("🔄 Resetting all pump/valve states in Supabase to OFF...");
 
   // Reset dosing pumps A, B, C, D
   const char* pumpKeys[] = {"A", "B", "C", "D"};
   for (int i = 0; i < 4; i++) {
     String path = String(PATH_DOSING_PUMPS) + "/" + pumpKeys[i];
-    rtdbRequest("PATCH", path.c_str(), "{\"state\":\"OFF\",\"endTime\":0}");
+    supabaseRequest("PATCH", path.c_str(), "{\"state\":\"OFF\",\"endTime\":0}");
   }
 
   // Reset main pump
-  rtdbRequest("PATCH", PATH_PUMP_CONTROL, "{\"state\":\"OFF\",\"endTime\":0}");
+  supabaseRequest("PATCH", PATH_PUMP_CONTROL, "{\"state\":\"OFF\",\"endTime\":0}");
 
   // Reset solenoid valves
   const char* zoneKeys[] = {"zone1", "zone2", "zone3"};
   for (int i = 0; i < 3; i++) {
     String path = String(PATH_SOLENOID_VALVES) + "/" + zoneKeys[i];
-    rtdbRequest("PATCH", path.c_str(), "{\"state\":\"CLOSED\"}");
+    supabaseRequest("PATCH", path.c_str(), "{\"state\":\"CLOSED\"}");
   }
 
-  Serial.println("✅ All pump/valve states reset to OFF in Firebase.");
+  Serial.println("✅ All pump/valve states reset to OFF in Supabase.");
   sendLog("Device booted - all pumps reset to OFF");
 }
 
@@ -886,7 +893,7 @@ void resetAllPumpStatesInFirebase() {
 void backgroundSensorTask(void *pvParameters) {
   for (;;) {
     if (WiFi.status() == WL_CONNECTED) {
-      // CRITICAL: When automation is running, STOP all background Firebase requests!
+      // CRITICAL: When automation is running, STOP all background Supabase requests!
       // Two cores making TLS connections simultaneously crashes the ESP32 (OOM).
       // processPumpState() on Core 1 handles everything during automation.
       if (!schedulePending) {
@@ -913,7 +920,7 @@ void backgroundSensorTask(void *pvParameters) {
 // ─────────────────────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
-  rtdbMutex = xSemaphoreCreateMutex();
+  supabaseMutex = xSemaphoreCreateMutex();
 
   // Initialize and immediately turn OFF each relay sequentially to prevent massive inrush current (boot crashing)
   pinMode(TDS_POWER, OUTPUT);       digitalWrite(TDS_POWER, LOW);
@@ -933,9 +940,9 @@ void setup() {
   setupWiFi();    // WiFiManager — captive portal if no credentials saved
   setupTime();    // NTP sync
 
-  // CRITICAL: On boot, force ALL pump/valve states in Firebase to OFF.
+  // CRITICAL: On boot, force ALL pump/valve states in Supabase to OFF.
   // This prevents stale "ON" states from a previous crash turning pumps on.
-  resetAllPumpStatesInFirebase();
+  resetAllPumpStatesInSupabase();
 
   // Spawn the background task for blocking sensor/HTTP reads
   xTaskCreatePinnedToCore(
@@ -972,10 +979,10 @@ void loop() {
 
   // — Manual pump command poll —
   // CRITICAL: Skip manual polling when automation is running!
-  // Otherwise checkManualFromRTDB() reads Firebase (state=OFF) and 
+  // Otherwise checkManualFromSupabase() reads Supabase (state=OFF) and
   // immediately turns off the relay that the automation just turned ON.
   if (!schedulePending && millis() - lastPumpPoll > PUMP_POLL_INTERVAL) {
     lastPumpPoll = millis();
-    checkManualFromRTDB();
+    checkManualFromSupabase();
   }
 }

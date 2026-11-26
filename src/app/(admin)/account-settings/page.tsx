@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { requireSupabaseConfig, supabase } from "@/config/supabase";
 
 export default function AccountSettingsPage() {
   const { user } = useAuth();
@@ -32,19 +32,25 @@ export default function AccountSettingsPage() {
 
     setSavingPassword(true);
     try {
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, newPassword);
+      requireSupabaseConfig();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      if (signInError) throw signInError;
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
       showToast("Password changed successfully.", "success");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating password:", error);
-      if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
+      const code = typeof error === "object" && error !== null && "code" in error ? error.code : "";
+      if (code === "invalid_credentials") {
         showToast("Current password is incorrect.", "error");
       } else {
-        showToast(error.message || "Failed to update password.", "error");
+        showToast(error instanceof Error ? error.message : "Failed to update password.", "error");
       }
     } finally {
       setSavingPassword(false);

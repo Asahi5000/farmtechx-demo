@@ -26,7 +26,8 @@ export default function UserDropdown() {
     router.push("/signin");
   };
 
-  const displayName = user?.displayName || "Admin";
+  const displayName = user?.user_metadata?.display_name || "Admin";
+  const photoURL = user?.user_metadata?.avatar_url;
   const email = user?.email || "";
   const initials = displayName.charAt(0).toUpperCase();
 
@@ -36,9 +37,9 @@ export default function UserDropdown() {
         onClick={toggleDropdown}
         className="flex items-center text-gray-700 dark:text-gray-400 dropdown-toggle"
       >
-        <span className={`mr-3 h-11 w-11 flex items-center justify-center ${user?.photoURL ? '' : 'bg-blue-600 rounded-xl overflow-hidden'}`}>
-          {user?.photoURL ? (
-            <img src={user.photoURL} alt="User" className="w-full h-full object-contain" />
+        <span className={`mr-3 h-11 w-11 flex items-center justify-center ${photoURL ? '' : 'bg-blue-600 rounded-xl overflow-hidden'}`}>
+          {photoURL ? (
+            <img src={photoURL} alt="User" className="w-full h-full object-contain" />
           ) : (
             <span className="text-white font-bold text-lg">{initials}</span>
           )}

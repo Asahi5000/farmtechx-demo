@@ -39,7 +39,7 @@
     "node_modules",
     "check_muni.ts",
     "scripts/**/*",
-    "functions/**/*",
+    "supabase/functions/**/*",
     "*.js",
     "*.mjs"
   ]

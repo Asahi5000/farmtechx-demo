@@ -1,11 +1,8 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { updateProfile } from "firebase/auth";
 import { useToast } from "@/context/ToastContext";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { firestore, storage } from "@/config/firebase";
+import { requireSupabaseConfig, supabase } from "@/config/supabase";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, X, Loader2 } from "lucide-react";
 import Button from "../ui/button/Button";
@@ -20,7 +17,7 @@ interface AdminProfile {
 }
 
 export default function UserMetaCard() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, updateProfile } = useAuth();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -35,27 +32,31 @@ export default function UserMetaCard() {
 
   const [profileData, setProfileData] = useState<AdminProfile>({ phone: "", bio: "", address: "", country: "" });
 
-  const initials = (user?.displayName || "A").charAt(0).toUpperCase();
+  const metadataDisplayName = user?.user_metadata?.display_name as string | undefined;
+  const photoURL = user?.user_metadata?.avatar_url as string | undefined;
+  const initials = (metadataDisplayName || "A").charAt(0).toUpperCase();
 
-  // Load extra profile fields from Firestore
   useEffect(() => {
     async function loadProfile() {
       if (!user) return;
       try {
-        const snap = await getDoc(doc(firestore, "adminProfiles", user.uid));
-        if (snap.exists()) {
-          const data = snap.data() as AdminProfile;
-          setProfileData(data);
-        }
+        requireSupabaseConfig();
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("phone,bio,address,country")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (error) throw error;
+        if (data) setProfileData(data);
       } catch (e) {
         console.error("Failed to load admin profile:", e);
       }
     }
-    loadProfile();
+    void loadProfile();
   }, [user]);
 
   const openModal = () => {
-    setDisplayName(user?.displayName || "");
+    setDisplayName(metadataDisplayName || "");
     setPhone(profileData.phone || "");
     setBio(profileData.bio || "");
     setAddress(profileData.address || "");
@@ -82,14 +83,16 @@ export default function UserMetaCard() {
 
     setUploadingPhoto(true);
     try {
-      const storageRef = ref(storage, `adminProfiles/${user.uid}/avatar_${Date.now()}.${file.name.split('.').pop()}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-      await updateProfile(user, { photoURL: downloadURL });
-      refreshUser();
+        requireSupabaseConfig();
+        const objectPath = `${user.id}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(objectPath, file, { upsert: true, contentType: file.type });
+        if (uploadError) throw uploadError;
+        const { data } = supabase.storage.from("avatars").getPublicUrl(objectPath);
+        await updateProfile(metadataDisplayName || "", data.publicUrl);
+        await refreshUser();
       showToast("Profile photo updated!", "success");
-      // Force re-render by triggering state
-      setUploadingPhoto(false);
     } catch (error) {
       console.error("Failed to upload photo:", error);
       showToast("Failed to upload photo.", "error");
@@ -103,10 +106,9 @@ export default function UserMetaCard() {
     if (!user) return;
     setSaving(true);
     try {
-      await updateProfile(user, {
-        displayName: displayName.trim() || user.displayName,
-      });
-      refreshUser();
+      requireSupabaseConfig();
+      const normalizedName = displayName.trim() || metadataDisplayName || "";
+      await updateProfile(normalizedName);
 
       const extraFields: AdminProfile = {
         phone: phone.trim(),
@@ -114,7 +116,11 @@ export default function UserMetaCard() {
         address: address.trim(),
         country: country.trim(),
       };
-      await setDoc(doc(firestore, "adminProfiles", user.uid), extraFields, { merge: true });
+      const { error } = await supabase
+        .from("profiles")
+        .update({ ...extraFields, name: normalizedName })
+        .eq("id", user.id);
+      if (error) throw error;
 
       setProfileData(extraFields);
       showToast("Profile updated successfully.", "success");
@@ -134,9 +140,9 @@ export default function UserMetaCard() {
           <div className="flex flex-col items-center w-full gap-6 xl:flex-row">
             {/* Avatar with hover-to-change */}
             <div className="relative group shrink-0">
-              <div className={`w-20 h-20 flex items-center justify-center ${user?.photoURL ? '' : 'bg-blue-600 rounded-2xl overflow-hidden'}`}>
-                {user?.photoURL ? (
-                  <img src={user.photoURL} alt="user" className="w-full h-full object-contain" />
+              <div className={`w-20 h-20 flex items-center justify-center ${photoURL ? '' : 'bg-blue-600 rounded-2xl overflow-hidden'}`}>
+              {photoURL ? (
+                <img src={photoURL} alt="user" className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-white font-bold text-3xl">{initials}</span>
                 )}
@@ -144,7 +150,7 @@ export default function UserMetaCard() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingPhoto}
-                className={`absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer ${user?.photoURL ? 'rounded-lg' : 'rounded-2xl'}`}
+                className={`absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer ${photoURL ? 'rounded-lg' : 'rounded-2xl'}`}
               >
                 {uploadingPhoto ? (
                   <Loader2 className="w-5 h-5 text-white animate-spin" />
@@ -163,7 +169,7 @@ export default function UserMetaCard() {
 
             <div className="order-3 xl:order-2">
               <h4 className="mb-2 text-lg font-semibold text-center text-gray-800 dark:text-white/90 xl:text-left">
-                {user?.displayName || "Admin"}
+                {metadataDisplayName || "Admin"}
               </h4>
               <div className="flex flex-col items-center gap-1 text-center xl:flex-row xl:gap-3 xl:text-left">
                 <p className="text-sm text-gray-500 dark:text-gray-400">

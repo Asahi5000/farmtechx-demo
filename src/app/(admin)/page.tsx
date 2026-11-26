@@ -114,7 +114,7 @@ export default function DashboardPage() {
       <div className="bg-gradient-to-r from-brand-500 to-brand-600 rounded-xl p-5 sm:p-6 shadow-lg text-white">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold">Welcome back, {user?.displayName || user?.email?.split('@')[0] || 'User'}!</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">Welcome back, {user?.user_metadata?.display_name || user?.email?.split('@')[0] || 'User'}!</h1>
           </div>
           <div className="text-left sm:text-right">
             <p className="text-brand-100 text-xs sm:text-sm">Current Date & Time</p>

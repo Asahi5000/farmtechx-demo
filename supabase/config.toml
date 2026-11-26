@@ -1,0 +1,2 @@
+[functions.farm-device]
+verify_jwt = false
