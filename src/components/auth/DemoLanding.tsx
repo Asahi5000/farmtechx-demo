@@ -36,13 +36,13 @@ export default function DemoLanding() {
   };
 
   return (
-    <main className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-gradient-to-br from-emerald-950 via-green-950 to-slate-950 px-5 py-12">
+    <main className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-gradient-to-br from-brand-950 via-brand-900 to-gray-900 px-5 py-12">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-30"
         style={{
           backgroundImage:
-            "radial-gradient(circle at 20% 20%, rgba(52, 211, 153, .38), transparent 34%), radial-gradient(circle at 82% 78%, rgba(132, 204, 22, .28), transparent 32%)",
+            "radial-gradient(circle at 20% 20%, rgba(117, 146, 255, .38), transparent 34%), radial-gradient(circle at 82% 78%, rgba(70, 95, 255, .28), transparent 32%)",
         }}
       />
       <section className="relative w-full max-w-xl rounded-[28px] bg-white px-7 py-9 shadow-2xl shadow-black/30 sm:px-12 sm:py-11">
