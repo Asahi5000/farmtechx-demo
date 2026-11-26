@@ -93,14 +93,7 @@ export default function DemoLanding() {
           </p>
         </div>
 
-        <div className="mt-7 text-center">
-          <Link
-            href="/signin/admin"
-            className="text-sm font-medium text-emerald-800 underline-offset-4 hover:underline"
-          >
-            Administrator sign in
-          </Link>
-        </div>
+
       </section>
       <p className="absolute bottom-5 px-4 text-center text-xs text-white/70">
         FarmTechXBaluzo · Hydroponic farm management
