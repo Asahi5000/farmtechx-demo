@@ -26,9 +26,10 @@ export default function UserDropdown() {
     router.push("/signin");
   };
 
-  const displayName = user?.user_metadata?.display_name || "Admin";
+  const isDemoUser = user?.is_anonymous === true;
+  const displayName = isDemoUser ? "Demo Visitor" : user?.user_metadata?.display_name || "Admin";
   const photoURL = user?.user_metadata?.avatar_url;
-  const email = user?.email || "";
+  const email = isDemoUser ? "Public demo session" : user?.email || "";
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
@@ -81,14 +82,15 @@ export default function UserDropdown() {
           </span>
         </div>
 
-        <ul className="flex flex-col gap-1 pt-4 pb-3 border-b border-gray-200 dark:border-gray-800">
-          <li>
-            <DropdownItem
-              onItemClick={closeDropdown}
-              tag="a"
-              href="/profile"
-              className="flex items-center gap-3 px-3 py-2 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
-            >
+        {!isDemoUser && (
+          <ul className="flex flex-col gap-1 border-b border-gray-200 pb-3 pt-4 dark:border-gray-800">
+            <li>
+              <DropdownItem
+                onItemClick={closeDropdown}
+                tag="a"
+                href="/profile"
+                className="flex items-center gap-3 px-3 py-2 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
+              >
               <svg
                 className="fill-gray-500 group-hover:fill-gray-700 dark:fill-gray-400 dark:group-hover:fill-gray-300"
                 width="24"
@@ -104,16 +106,16 @@ export default function UserDropdown() {
                   fill=""
                 />
               </svg>
-              Edit profile
-            </DropdownItem>
-          </li>
-          <li>
-            <DropdownItem
-              onItemClick={closeDropdown}
-              tag="a"
-              href="/account-settings"
-              className="flex items-center gap-3 px-3 py-2 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
-            >
+                Edit profile
+              </DropdownItem>
+            </li>
+            <li>
+              <DropdownItem
+                onItemClick={closeDropdown}
+                tag="a"
+                href="/account-settings"
+                className="flex items-center gap-3 px-3 py-2 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
+              >
               <svg
                 className="fill-gray-500 group-hover:fill-gray-700 dark:fill-gray-400 dark:group-hover:fill-gray-300"
                 width="24"
@@ -129,10 +131,11 @@ export default function UserDropdown() {
                   fill=""
                 />
               </svg>
-              Account settings
-            </DropdownItem>
-          </li>
-        </ul>
+                Account settings
+              </DropdownItem>
+            </li>
+          </ul>
+        )}
         <button
           onClick={handleSignOut}
           className="flex items-center gap-3 px-3 py-2 mt-3 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300 w-full"

@@ -59,6 +59,7 @@ async function readSchedules(path: string): Promise<unknown> {
     const { data, error } = await supabase
       .from("water_schedules")
       .select("id,schedule,last_executed")
+      .eq("is_demo", false)
       .order("created_at", { ascending: true });
     if (error) throw error;
     return Object.fromEntries((data ?? []).map((row) => [
@@ -75,6 +76,7 @@ async function readSchedules(path: string): Promise<unknown> {
     .from("water_schedules")
     .select("schedule,last_executed")
     .eq("id", id)
+    .eq("is_demo", false)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
@@ -94,6 +96,7 @@ async function readWaterReadings(path: string): Promise<unknown> {
       .from("water_sensor_readings")
       .select("payload")
       .eq("id", id)
+      .eq("is_demo", false)
       .maybeSingle();
     if (error) throw error;
     return data?.payload ?? null;
@@ -102,6 +105,7 @@ async function readWaterReadings(path: string): Promise<unknown> {
   const { data, error } = await supabase
     .from("water_sensor_readings")
     .select("id,payload")
+    .eq("is_demo", false)
     .order("occurred_at", { ascending: true })
     .limit(500);
   if (error) throw error;
@@ -113,6 +117,7 @@ async function readDeviceLogs(path: string): Promise<unknown> {
     .from("device_logs")
     .select("id,timestamp,message")
     .eq("source", path)
+    .eq("is_demo", false)
     .order("created_at", { ascending: true })
     .limit(500);
   if (error) throw error;
@@ -135,7 +140,7 @@ async function handleRequest(method: string, path: string, value: unknown): Prom
   if (path === schedulesPath && method === "POST") {
     const { data, error } = await supabase
       .from("water_schedules")
-      .insert({ schedule: value })
+      .insert({ schedule: value, is_demo: false })
       .select("id")
       .single();
     if (error) throw error;
@@ -145,7 +150,11 @@ async function handleRequest(method: string, path: string, value: unknown): Prom
   if (path.startsWith(`${schedulesPath}/`)) {
     const [id, field] = path.slice(schedulesPath.length + 1).split("/");
     if (method === "DELETE") {
-      const { error } = await supabase.from("water_schedules").delete().eq("id", id);
+      const { error } = await supabase
+        .from("water_schedules")
+        .delete()
+        .eq("id", id)
+        .eq("is_demo", false);
       if (error) throw error;
       return null;
     }
@@ -157,7 +166,8 @@ async function handleRequest(method: string, path: string, value: unknown): Prom
       const { error } = await supabase
         .from("water_schedules")
         .update({ last_executed: lastExecuted })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("is_demo", false);
       if (error) throw error;
       return value;
     }
@@ -165,7 +175,8 @@ async function handleRequest(method: string, path: string, value: unknown): Prom
       const { error } = await supabase
         .from("water_schedules")
         .update({ schedule: value })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("is_demo", false);
       if (error) throw error;
       return value;
     }
@@ -175,6 +186,7 @@ async function handleRequest(method: string, path: string, value: unknown): Prom
         .from("water_schedules")
         .select("schedule")
         .eq("id", id)
+        .eq("is_demo", false)
         .maybeSingle();
       if (readError) throw readError;
       if (!current) return null;
@@ -190,7 +202,11 @@ async function handleRequest(method: string, path: string, value: unknown): Prom
           lastExecuted < 1e12 ? lastExecuted * 1000 : lastExecuted
         ).toISOString();
       }
-      const { error } = await supabase.from("water_schedules").update(databaseUpdates).eq("id", id);
+      const { error } = await supabase
+        .from("water_schedules")
+        .update(databaseUpdates)
+        .eq("id", id)
+        .eq("is_demo", false);
       if (error) throw error;
       return readSchedules(`${schedulesPath}/${id}`);
     }
@@ -204,7 +220,7 @@ async function handleRequest(method: string, path: string, value: unknown): Prom
       : new Date().toISOString();
     const { data, error } = await supabase
       .from("water_sensor_readings")
-      .insert({ payload, occurred_at: occurredAt })
+      .insert({ payload, occurred_at: occurredAt, is_demo: false })
       .select("id")
       .single();
     if (error) throw error;
@@ -219,6 +235,7 @@ async function handleRequest(method: string, path: string, value: unknown): Prom
         source: path,
         timestamp: String(log.timestamp ?? new Date().toISOString()),
         message: String(log.message ?? ""),
+        is_demo: false,
       })
       .select("id")
       .single();

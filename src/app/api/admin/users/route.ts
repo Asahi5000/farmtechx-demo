@@ -25,6 +25,9 @@ async function getAdminContext(request: NextRequest) {
   if (authError || !authData.user) {
     return { ok: false as const, error: "Your session is invalid or expired.", status: 401 };
   }
+  if (authData.user.is_anonymous) {
+    return { ok: false as const, error: "Administrator access is required.", status: 403 };
+  }
 
   const adminClient = createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },

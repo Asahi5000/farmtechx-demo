@@ -27,8 +27,11 @@ create table if not exists public.farm_state (
 create table if not exists public.water_sensor_readings (
   id uuid primary key default gen_random_uuid(),
   occurred_at timestamptz not null default now(),
-  payload jsonb not null
+  payload jsonb not null,
+  is_demo boolean not null default false
 );
+alter table public.water_sensor_readings
+  add column if not exists is_demo boolean not null default false;
 create index if not exists water_sensor_readings_occurred_at_idx
   on public.water_sensor_readings (occurred_at desc);
 
@@ -37,8 +40,11 @@ create table if not exists public.device_logs (
   source text not null,
   timestamp text not null,
   message text not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  is_demo boolean not null default false
 );
+alter table public.device_logs
+  add column if not exists is_demo boolean not null default false;
 create index if not exists device_logs_source_created_at_idx
   on public.device_logs (source, created_at desc);
 
@@ -46,8 +52,11 @@ create table if not exists public.water_schedules (
   id uuid primary key default gen_random_uuid(),
   schedule jsonb not null,
   last_executed timestamptz,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  is_demo boolean not null default false
 );
+alter table public.water_schedules
+  add column if not exists is_demo boolean not null default false;
 
 create or replace function public.is_farm_admin()
 returns boolean
@@ -60,6 +69,15 @@ as $$
     select 1 from public.profiles
     where id = (select auth.uid()) and role = 'Admin'
   );
+$$;
+
+create or replace function public.is_farm_demo_user()
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce((select (auth.jwt() ->> 'is_anonymous')::boolean), false);
 $$;
 
 create or replace function public.create_farm_profile()
@@ -119,8 +137,14 @@ create policy "Profiles are visible to their owner and admins"
 drop policy if exists "Profiles are editable by their owner and admins" on public.profiles;
 create policy "Profiles are editable by their owner and admins"
   on public.profiles for update to authenticated
-  using (id = (select auth.uid()) or public.is_farm_admin())
-  with check (id = (select auth.uid()) or public.is_farm_admin());
+  using (
+    (id = (select auth.uid()) and not (select public.is_farm_demo_user()))
+    or public.is_farm_admin()
+  )
+  with check (
+    (id = (select auth.uid()) and not (select public.is_farm_demo_user()))
+    or public.is_farm_admin()
+  );
 drop policy if exists "Admins can create profiles" on public.profiles;
 create policy "Admins can create profiles"
   on public.profiles for insert to authenticated
@@ -140,33 +164,41 @@ create policy "Admins can manage municipalities"
 
 drop policy if exists "Authenticated users can read farm state" on public.farm_state;
 create policy "Authenticated users can read farm state"
-  on public.farm_state for select to authenticated using (true);
+  on public.farm_state for select to authenticated
+  using ((path like 'farmtechx-demo/%') = (select public.is_farm_demo_user()));
 drop policy if exists "Authenticated users can update farm state" on public.farm_state;
 create policy "Authenticated users can update farm state"
   on public.farm_state for all to authenticated
-  using (true) with check (true);
+  using ((path like 'farmtechx-demo/%') = (select public.is_farm_demo_user()))
+  with check ((path like 'farmtechx-demo/%') = (select public.is_farm_demo_user()));
 
 drop policy if exists "Authenticated users can read sensor readings" on public.water_sensor_readings;
 create policy "Authenticated users can read sensor readings"
-  on public.water_sensor_readings for select to authenticated using (true);
+  on public.water_sensor_readings for select to authenticated
+  using (is_demo = (select public.is_farm_demo_user()));
 drop policy if exists "Authenticated users can add sensor readings" on public.water_sensor_readings;
 create policy "Authenticated users can add sensor readings"
-  on public.water_sensor_readings for insert to authenticated with check (true);
+  on public.water_sensor_readings for insert to authenticated
+  with check (is_demo = (select public.is_farm_demo_user()));
 
 drop policy if exists "Authenticated users can read device logs" on public.device_logs;
 create policy "Authenticated users can read device logs"
-  on public.device_logs for select to authenticated using (true);
+  on public.device_logs for select to authenticated
+  using (is_demo = (select public.is_farm_demo_user()));
 drop policy if exists "Authenticated users can add device logs" on public.device_logs;
 create policy "Authenticated users can add device logs"
-  on public.device_logs for insert to authenticated with check (true);
+  on public.device_logs for insert to authenticated
+  with check (is_demo = (select public.is_farm_demo_user()));
 
 drop policy if exists "Authenticated users can read schedules" on public.water_schedules;
 create policy "Authenticated users can read schedules"
-  on public.water_schedules for select to authenticated using (true);
+  on public.water_schedules for select to authenticated
+  using (is_demo = (select public.is_farm_demo_user()));
 drop policy if exists "Authenticated users can manage schedules" on public.water_schedules;
 create policy "Authenticated users can manage schedules"
   on public.water_schedules for all to authenticated
-  using (true) with check (true);
+  using (is_demo = (select public.is_farm_demo_user()))
+  with check (is_demo = (select public.is_farm_demo_user()));
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('avatars', 'avatars', true, 5242880, array['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
@@ -181,12 +213,24 @@ create policy "Avatar images are publicly readable"
 drop policy if exists "Users can upload their own avatar" on storage.objects;
 create policy "Users can upload their own avatar"
   on storage.objects for insert to authenticated
-  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and not (select public.is_farm_demo_user())
+  );
 drop policy if exists "Users can update their own avatar" on storage.objects;
 create policy "Users can update their own avatar"
   on storage.objects for update to authenticated
-  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text)
-  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and not (select public.is_farm_demo_user())
+  )
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = (select auth.uid())::text
+    and not (select public.is_farm_demo_user())
+  );
 
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on public.profiles to authenticated;
@@ -196,5 +240,6 @@ grant select, insert on public.water_sensor_readings to authenticated;
 grant select, insert on public.device_logs to authenticated;
 grant select, insert, update, delete on public.water_schedules to authenticated;
 grant execute on function public.is_farm_admin() to authenticated;
+grant execute on function public.is_farm_demo_user() to authenticated;
 
 -- Enable these tables for Realtime in Supabase Dashboard > Database > Publications.

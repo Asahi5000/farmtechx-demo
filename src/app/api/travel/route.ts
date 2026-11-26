@@ -77,6 +77,9 @@ async function authenticate(request: NextRequest) {
   if (error || !data.user) {
     return { ok: false as const, error: "Your session is invalid or expired.", status: 401 };
   }
+  if (data.user.is_anonymous) {
+    return { ok: false as const, error: "Travel actions are unavailable in demo sessions.", status: 403 };
+  }
 
   return { ok: true as const, client };
 }

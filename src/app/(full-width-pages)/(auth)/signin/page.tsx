@@ -1,11 +1,11 @@
-import SignInForm from "@/components/auth/SignInForm";
+import DemoLanding from "@/components/auth/DemoLanding";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "FarmTechXBaluzo Admin Sign In",
-  description: "FarmTechXBaluzo Hydroponic Farm Management System",
+  title: "FarmTechXBaluzo Public Demo",
+  description: "Explore the FarmTechX hydroponic farm management demo.",
 };
 
 export default function SignIn() {
-  return <SignInForm />;
+  return <DemoLanding />;
 }

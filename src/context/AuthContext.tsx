@@ -8,6 +8,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
+  enterDemo: () => Promise<void>;
   signOut: () => Promise<void>;
   updateProfile: (displayName: string, photoURL?: string) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -45,6 +46,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(data.user);
   };
 
+  const enterDemo = async () => {
+    requireSupabaseConfig();
+    const { data, error } = await supabase.auth.signInAnonymously();
+    if (error) throw error;
+    if (!data.user) throw new Error("Supabase did not create a demo session.");
+    setUser(data.user);
+  };
+
   const signOut = async () => {
     requireSupabaseConfig();
     const { error } = await supabase.auth.signOut();
@@ -73,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, signIn, signOut, updateProfile, refreshUser }}
+      value={{ user, loading, signIn, enterDemo, signOut, updateProfile, refreshUser }}
     >
       {children}
     </AuthContext.Provider>

@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useRouter } from "next/navigation";
 import { isSupabaseConfigured } from "@/config/supabase";
+import Link from "next/link";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -127,6 +128,11 @@ export default function SignInForm() {
                 </div>
               </div>
             </form>
+            <div className="mt-5 text-center">
+              <Link href="/signin" className="text-sm text-brand-500 hover:underline">
+                Back to public demo
+              </Link>
+            </div>
           </div>
         </div>
       </div>

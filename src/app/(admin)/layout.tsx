@@ -2,11 +2,13 @@
 
 import { useSidebar } from "@/context/SidebarContext";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
 import React, { useEffect } from "react";
+
+const demoRestrictedPaths = ["/profile", "/account-settings", "/users"];
 
 export default function AdminLayout({
   children,
@@ -16,15 +18,21 @@ export default function AdminLayout({
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const isRestrictedDemoPath =
+    user?.is_anonymous === true &&
+    demoRestrictedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/signin");
+      router.replace("/signin");
+    } else if (!loading && isRestrictedDemoPath) {
+      router.replace("/");
     }
-  }, [user, loading, router]);
+  }, [user, loading, isRestrictedDemoPath, router]);
 
   // Loading state prevents flashing the dashboard before redirect
-  if (loading || (!user && !loading)) {
+  if (loading || (!user && !loading) || isRestrictedDemoPath) {
     return (
       <div className="flex h-screen items-center justify-center bg-white dark:bg-gray-900">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-solid border-brand-500 border-t-transparent"></div>
